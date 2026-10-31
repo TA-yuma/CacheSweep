@@ -1,0 +1,245 @@
+{
+  "schemaVersion": "1",
+  "targets": [
+    {
+      "id": "user-temp",
+      "name": "用户临时文件",
+      "description": "应用程序写入的临时文件，重启后可重新生成",
+      "path": "%TEMP%",
+      "category": "TempFiles",
+      "risk": "Safe",
+      "strategy": "ContentsOfDirectory"
+    },
+    {
+      "id": "windows-temp",
+      "name": "Windows 临时文件",
+      "description": "系统级临时目录，正在被占用的文件会自动跳过",
+      "path": "%WINDIR%\\Temp",
+      "category": "TempFiles",
+      "risk": "Safe",
+      "strategy": "ContentsOfDirectory"
+    },
+    {
+      "id": "crash-dumps",
+      "name": "崩溃转储文件",
+      "description": "程序崩溃时生成的内存快照，占用大且无保留价值",
+      "path": "%LOCALAPPDATA%\\CrashDumps",
+      "category": "CrashAndDiagnostics",
+      "risk": "Safe",
+      "strategy": "ContentsOfDirectory"
+    },
+    {
+      "id": "wer-reports",
+      "name": "Windows 错误报告",
+      "description": "错误报告队列与存档",
+      "path": "%LOCALAPPDATA%\\Microsoft\\Windows\\WER",
+      "category": "CrashAndDiagnostics",
+      "risk": "Safe",
+      "strategy": "ContentsOfDirectory"
+    },
+    {
+      "id": "thumbnail-cache",
+      "name": "缩略图缓存",
+      "description": "资源管理器缩略图数据库，删后按需重建",
+      "path": "%LOCALAPPDATA%\\Microsoft\\Windows\\Explorer",
+      "category": "SystemCache",
+      "risk": "Safe",
+      "strategy": "MatchingEntries",
+      "match": "Extensions",
+      "extensions": [".db"],
+      "guardProcess": "explorer"
+    },
+    {
+      "id": "d3d-shader-cache",
+      "name": "DirectX 着色器缓存",
+      "description": "GPU 着色器编译缓存，删后游戏首次启动稍慢",
+      "path": "%LOCALAPPDATA%\\D3DSCache",
+      "category": "SystemCache",
+      "risk": "Safe",
+      "strategy": "ContentsOfDirectory"
+    },
+    {
+      "id": "windows-update-cache",
+      "name": "Windows 更新缓存",
+      "description": "已下载的更新安装包，安装完成后可清理",
+      "path": "%WINDIR%\\SoftwareDistribution\\Download",
+      "category": "SystemCache",
+      "risk": "Safe",
+      "strategy": "ContentsOfDirectory"
+    },
+    {
+      "id": "windows-cbs-logs",
+      "name": "组件服务日志",
+      "description": "CBS.log 等系统维护日志",
+      "path": "%WINDIR%\\Logs\\CBS",
+      "category": "CrashAndDiagnostics",
+      "risk": "Safe",
+      "strategy": "ContentsOfDirectory"
+    },
+    {
+      "id": "edge-cache",
+      "name": "Edge 浏览器缓存",
+      "description": "网页资源缓存。不会删除书签、密码、历史记录",
+      "path": "%LOCALAPPDATA%\\Microsoft\\Edge\\User Data\\Default\\Cache",
+      "category": "BrowserCache",
+      "risk": "Caution",
+      "strategy": "ContentsOfDirectory",
+      "guardProcess": "msedge"
+    },
+    {
+      "id": "edge-gpu-cache",
+      "name": "Edge GPU 缓存",
+      "description": "浏览器 GPU 渲染缓存",
+      "path": "%LOCALAPPDATA%\\Microsoft\\Edge\\User Data\\Default\\GPUCache",
+      "category": "BrowserCache",
+      "risk": "Caution",
+      "strategy": "ContentsOfDirectory",
+      "guardProcess": "msedge"
+    },
+    {
+      "id": "edge-code-cache",
+      "name": "Edge 脚本缓存",
+      "description": "JavaScript 编译缓存，删后网页首次加载略慢",
+      "path": "%LOCALAPPDATA%\\Microsoft\\Edge\\User Data\\Default\\Code Cache",
+      "category": "BrowserCache",
+      "risk": "Caution",
+      "strategy": "ContentsOfDirectory",
+      "guardProcess": "msedge"
+    },
+    {
+      "id": "chrome-cache",
+      "name": "Chrome 浏览器缓存",
+      "description": "网页资源缓存。不会删除书签、密码、历史记录",
+      "path": "%LOCALAPPDATA%\\Google\\Chrome\\User Data\\Default\\Cache",
+      "category": "BrowserCache",
+      "risk": "Caution",
+      "strategy": "ContentsOfDirectory",
+      "guardProcess": "chrome"
+    },
+    {
+      "id": "chrome-gpu-cache",
+      "name": "Chrome GPU 缓存",
+      "description": "浏览器 GPU 渲染缓存",
+      "path": "%LOCALAPPDATA%\\Google\\Chrome\\User Data\\Default\\GPUCache",
+      "category": "BrowserCache",
+      "risk": "Caution",
+      "strategy": "ContentsOfDirectory",
+      "guardProcess": "chrome"
+    },
+    {
+      "id": "brave-cache",
+      "name": "Brave 浏览器缓存",
+      "description": "网页资源缓存，不影响书签与密码",
+      "path": "%LOCALAPPDATA%\\BraveSoftware\\Brave-Browser\\User Data\\Default\\Cache",
+      "category": "BrowserCache",
+      "risk": "Caution",
+      "strategy": "ContentsOfDirectory",
+      "guardProcess": "brave"
+    },
+    {
+      "id": "nvidia-shader-cache",
+      "name": "NVIDIA 着色器缓存",
+      "description": "NVIDIA 显卡驱动着色器缓存，通常占用很大，删后游戏首次启动重新编译",
+      "path": "%LOCALAPPDATA%\\NVIDIA",
+      "category": "AppCache",
+      "risk": "Caution",
+      "strategy": "MatchingEntries",
+      "match": "Patterns",
+      "namePatterns": ["DXCache", "GLCache", "NV_Cache", "ComputeCache"]
+    },
+    {
+      "id": "npm-cache",
+      "name": "npm 缓存",
+      "description": "Node.js 包管理器下载缓存，删后重新下载",
+      "path": "%APPDATA%\\npm-cache",
+      "category": "DeveloperCache",
+      "risk": "Caution",
+      "strategy": "ContentsOfDirectory"
+    },
+    {
+      "id": "pip-cache",
+      "name": "pip 缓存",
+      "description": "Python 包管理器的 wheel 缓存",
+      "path": "%LOCALAPPDATA%\\pip\\Cache",
+      "category": "DeveloperCache",
+      "risk": "Caution",
+      "strategy": "ContentsOfDirectory"
+    },
+    {
+      "id": "pnpm-store",
+      "name": "pnpm 存储",
+      "description": "pnpm 内容寻址存储，删后所有项目需要重新安装依赖",
+      "path": "%LOCALAPPDATA%\\pnpm-store",
+      "category": "DeveloperCache",
+      "risk": "Dangerous",
+      "strategy": "ContentsOfDirectory"
+    },
+    {
+      "id": "pnpm-store-alt",
+      "name": "pnpm 存储 (旧路径)",
+      "description": "pnpm 旧版本使用的存储目录",
+      "path": "%LOCALAPPDATA%\\pnpm\\store",
+      "category": "DeveloperCache",
+      "risk": "Dangerous",
+      "strategy": "ContentsOfDirectory"
+    },
+    {
+      "id": "yarn-cache",
+      "name": "Yarn 缓存",
+      "description": "Yarn 包管理器缓存",
+      "path": "%LOCALAPPDATA%\\Yarn\\Cache",
+      "category": "DeveloperCache",
+      "risk": "Caution",
+      "strategy": "ContentsOfDirectory"
+    },
+    {
+      "id": "nuget-cache",
+      "name": "NuGet 缓存",
+      "description": ".NET 包缓存，删后重新还原",
+      "path": "%LOCALAPPDATA%\\NuGet\\v3-cache",
+      "category": "DeveloperCache",
+      "risk": "Caution",
+      "strategy": "ContentsOfDirectory"
+    },
+    {
+      "id": "vscode-cache",
+      "name": "VS Code 缓存",
+      "description": "编辑器运行时缓存，不影响扩展与设置",
+      "path": "%APPDATA%\\Code\\Cache",
+      "category": "DeveloperCache",
+      "risk": "Caution",
+      "strategy": "ContentsOfDirectory",
+      "guardProcess": "Code"
+    },
+    {
+      "id": "vscode-cached-data",
+      "name": "VS Code 编译缓存",
+      "description": "V8 编译缓存，删后编辑器首次启动略慢",
+      "path": "%APPDATA%\\Code\\CachedData",
+      "category": "DeveloperCache",
+      "risk": "Caution",
+      "strategy": "ContentsOfDirectory",
+      "guardProcess": "Code"
+    },
+    {
+      "id": "vscode-logs",
+      "name": "VS Code 日志",
+      "description": "编辑器运行日志，超过 7 天的才删除",
+      "path": "%APPDATA%\\Code\\logs",
+      "category": "DeveloperCache",
+      "risk": "Safe",
+      "strategy": "ContentsOfDirectory",
+      "olderThanDays": 7,
+      "guardProcess": "Code"
+    },
+    {
+      "id": "recycle-bin",
+      "name": "回收站",
+      "description": "已删除但未清空的文件。清空后无法恢复，请先确认里面没有还要的东西",
+      "path": "%SystemDrive%\\$Recycle.Bin",
+      "category": "RecycleBin",
+      "risk": "Dangerous",
+      "strategy": "RecycleBin"
+    }
+  ]
+}

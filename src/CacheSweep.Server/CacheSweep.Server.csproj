@@ -1,0 +1,22 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+
+  <PropertyGroup>
+    <RootNamespace>CacheSweep.Server</RootNamespace>
+    <AssemblyName>CacheSweep.Server</AssemblyName>
+    <InvariantGlobalization>true</InvariantGlobalization>
+    <ApplicationIcon>Assets\cachesweep.ico</ApplicationIcon>
+    <AssemblyTitle>CacheSweep</AssemblyTitle>
+    <Description>磁盘体检与安全清理工具</Description>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\CacheSweep.Core\CacheSweep.Core.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- The exe icon is a build input, not a web asset. -->
+    <Content Remove="Assets\**" />
+    <None Remove="Assets\cachesweep.ico" />
+  </ItemGroup>
+
+</Project>

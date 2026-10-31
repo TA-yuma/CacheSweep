@@ -1,0 +1,14 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <RootNamespace>CacheSweep.Cli</RootNamespace>
+    <AssemblyName>cachesweep</AssemblyName>
+    <OutputType>Exe</OutputType>
+    <InvariantGlobalization>true</InvariantGlobalization>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\CacheSweep.Core\CacheSweep.Core.csproj" />
+  </ItemGroup>
+
+</Project>

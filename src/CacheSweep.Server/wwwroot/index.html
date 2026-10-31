@@ -1,0 +1,315 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="dark">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>CacheSweep · 磁盘体检与安全清理</title>
+  <meta name="description" content="本地磁盘缓存体检与安全清理工具，默认只读，清理可选进回收站。" />
+  <meta name="theme-color" content="#06080c" />
+  <link rel="icon" href="/assets/themes/fruit-orange.ico" sizes="any" id="favicon" />
+  <link rel="icon" type="image/png" sizes="512x512" href="/assets/fruit-orange.png" id="favicon-png" />
+  <link rel="apple-touch-icon" href="/assets/fruit-orange.png" />
+  <link rel="stylesheet" href="/css/app.css" />
+  <script>
+    /* Apply the stored theme before first paint so the page never flashes. */
+    (function () {
+      try {
+        var t = localStorage.getItem("cachesweep.theme");
+        if (t === "light" || t === "dark" || t === "transparent") {
+          document.documentElement.setAttribute("data-theme", t);
+        }
+      } catch (e) {}
+    })();
+  </script>
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">
+      <img class="logo-img" src="/assets/icon-256.png" alt="" width="38" height="38" />
+      <div class="brand-text">
+        <h1>CacheSweep</h1>
+        <p class="sub">磁盘体检 · 安全清理 · 默认只读</p>
+      </div>
+    </div>
+
+    <div class="actions">
+      <nav class="nav" role="tablist">
+        <button id="tab-sweep" class="active" role="tab" aria-selected="true">体检清理</button>
+        <button id="tab-disk" role="tab" aria-selected="false">占用分析</button>
+        <button id="tab-rules" role="tab" aria-selected="false">规则管理</button>
+        <button id="tab-settings" role="tab" aria-selected="false">设置</button>
+      </nav>
+
+      <div class="theme-switch" id="theme-switch" role="group" aria-label="主题">
+        <button data-theme-value="dark" title="赤橙 · 暖橙主题" aria-label="赤橙主题">
+          <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+            <path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z" />
+          </svg>
+        </button>
+        <button data-theme-value="light" title="青蔗 · 钢灰主题" aria-label="青蔗主题">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
+            <circle cx="12" cy="12" r="4.2" />
+            <path d="M12 2.4v2.2M12 19.4v2.2M4.2 4.2l1.6 1.6M18.2 18.2l1.6 1.6M2.4 12h2.2M19.4 12h2.2M4.2 19.8l1.6-1.6M18.2 5.8l1.6-1.6" />
+          </svg>
+        </button>
+        <button data-theme-value="transparent" title="碧提 · 青提主题" aria-label="碧提主题">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true">
+            <rect x="3" y="3" width="18" height="18" rx="4" />
+            <path d="M3 15.5h18M7.5 3v18" opacity=".55" />
+          </svg>
+        </button>
+      </div>
+
+      <span id="machine" class="machine" hidden></span>
+      <button id="btn-scan" class="btn primary">开始体检</button>
+    </div>
+  </header>
+
+  <main>
+    <div class="scanning" id="scanbar" hidden></div>
+    <div class="banner" id="banner" hidden></div>
+
+    <!-- ============ view: sweep ============ -->
+    <section class="view" id="view-sweep">
+      <section class="summary" id="summary" hidden>
+        <div class="stat stat-total">
+          <span class="stat-label">可清理总计</span>
+          <div class="stat-value" id="total-size">—</div>
+        </div>
+        <div class="stat stat-safe">
+          <span class="stat-label">安全 · 可一键</span>
+          <div class="stat-value" id="safe-size">—</div>
+        </div>
+        <div class="stat stat-caution">
+          <span class="stat-label">需确认</span>
+          <div class="stat-value" id="caution-size">—</div>
+        </div>
+        <div class="stat stat-danger">
+          <span class="stat-label">高风险</span>
+          <div class="stat-value" id="danger-size">—</div>
+        </div>
+        <div class="stat stat-time">
+          <span class="stat-label">扫描耗时</span>
+          <div class="stat-value" id="scan-time">—</div>
+        </div>
+        <div class="split" aria-hidden="true">
+          <span class="s-safe" id="split-safe" style="width:0"></span>
+          <span class="s-caution" id="split-caution" style="width:0"></span>
+          <span class="s-danger" id="split-danger" style="width:0"></span>
+        </div>
+      </section>
+
+      <section class="toolbar" id="toolbar" hidden>
+        <label class="chk"><input type="checkbox" id="select-all" /> <span>全选</span></label>
+        <button id="btn-select-safe" class="btn ghost sm">只选安全项</button>
+        <button id="btn-clear" class="btn ghost sm">清空选择</button>
+        <span class="spacer"></span>
+        <label class="chk"><input type="checkbox" id="use-recycle" checked /> <span>删除到回收站</span></label>
+        <button id="btn-preview" class="btn sm">预览清理</button>
+        <button id="btn-clean" class="btn danger sm" disabled>执行清理</button>
+      </section>
+
+      <section class="list" id="list"></section>
+
+      <section class="empty" id="empty">
+        <img class="empty-logo" src="/assets/icon-256.png" alt="" />
+        <p>点击「开始体检」扫描本机缓存占用</p>
+        <p class="hint">扫描完全只读，不会删除任何文件</p>
+      </section>
+    </section>
+
+    <!-- ============ view: disk usage ============ -->
+    <section class="view" id="view-disk" hidden>
+      <div class="inv-head">
+        <h2>占用分析</h2>
+        <span class="muted" id="disk-head-note">统计已安装程序、大文件与目录体积</span>
+        <span class="spacer"></span>
+        <div id="drives" style="display:flex;gap:10px;flex-wrap:wrap"></div>
+      </div>
+
+      <div class="summary" style="grid-template-columns:repeat(3,1fr)">
+        <div class="stat stat-total">
+          <span class="stat-label">已安装程序占用</span>
+          <div class="stat-value" id="apps-total">—</div>
+        </div>
+        <div class="stat stat-caution">
+          <span class="stat-label">大文件合计 (≥100MB)</span>
+          <div class="stat-value" id="files-total">—</div>
+        </div>
+        <div class="stat stat-safe">
+          <span class="stat-label">目录统计</span>
+          <div class="stat-value" id="folders-total">—</div>
+        </div>
+      </div>
+
+      <div class="inv-head">
+        <h2>已安装程序</h2>
+        <span class="muted" id="apps-note">—</span>
+        <span class="spacer"></span>
+        <button id="btn-load-apps" class="btn ghost sm">重新统计</button>
+      </div>
+      <div id="apps-list"></div>
+
+      <div class="inv-head" style="margin-top:18px">
+        <h2>最大的文件</h2>
+        <span class="muted" id="files-note">—</span>
+        <span class="spacer"></span>
+        <label class="chk"><span>最小</span>
+          <select id="file-min" class="btn sm" style="padding:5px 8px">
+            <option value="100">100 MB</option>
+            <option value="500">500 MB</option>
+            <option value="1024">1 GB</option>
+          </select>
+        </span></label>
+        <button id="btn-load-files" class="btn ghost sm">扫描大文件</button>
+      </div>
+      <div id="files-list"></div>
+
+      <div class="inv-head" style="margin-top:18px">
+        <h2>C 盘目录占用</h2>
+        <span class="muted" id="folders-note">—</span>
+        <span class="spacer"></span>
+        <button id="btn-load-folders" class="btn ghost sm">统计目录</button>
+      </div>
+      <div id="folders-list"></div>
+    </section>
+
+    <!-- ============ view: rules ============ -->
+    <section class="view" id="view-rules" hidden>
+      <div class="card" style="margin-bottom:14px">
+        <h3>白名单 / 黑名单</h3>
+        <p class="card-sub">
+          列表中打开开关的项目会被扫描和清理（白名单）；关闭的项目会被忽略（黑名单），
+          体积不再统计，也不会出现在体检结果里。设置会保存在
+          <code>%APPDATA%\CacheSweep\preferences.json</code>。
+        </p>
+        <div style="display:flex;gap:9px;flex-wrap:wrap">
+          <button id="btn-white-all" class="btn ghost sm">全部设为白名单</button>
+          <button id="btn-black-caution" class="btn ghost sm">「需确认」项设为黑名单</button>
+          <button id="btn-black-all" class="btn ghost sm">全部设为黑名单</button>
+          <span class="spacer" style="flex:1"></span>
+          <span class="muted" id="rules-count" style="font-size:12px;color:var(--text-faint);align-self:center"></span>
+        </div>
+      </div>
+
+      <div class="card" style="margin-bottom:14px">
+        <h3>添加自定义缓存位置</h3>
+        <p class="card-sub">
+          只有位于安全白名单内的路径才会被接受，其它路径会被明确拒绝并说明原因。
+        </p>
+        <div class="field">
+          <label for="custom-path">路径</label>
+          <input type="text" id="custom-path" placeholder="%LOCALAPPDATA%\MyApp\Cache" spellcheck="false" />
+          <span class="hint">支持 %LOCALAPPDATA% / %APPDATA% / %TEMP% 等环境变量</span>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 150px;gap:10px">
+          <div class="field">
+            <label for="custom-name">名称（可选）</label>
+            <input type="text" id="custom-name" placeholder="我的应用缓存" spellcheck="false" />
+          </div>
+          <div class="field">
+            <label for="custom-risk">风险级别</label>
+            <select id="custom-risk">
+              <option value="Caution">需确认</option>
+              <option value="Safe">安全</option>
+              <option value="Dangerous">高风险</option>
+            </select>
+          </div>
+        </div>
+        <button id="btn-add-custom" class="btn primary sm">添加</button>
+      </div>
+
+      <div id="rules-list"></div>
+    </section>
+
+    <!-- ============ view: settings ============ -->
+    <section class="view" id="view-settings" hidden>
+      <div class="settings-grid">
+        <div class="card">
+          <h3>外观主题</h3>
+          <p class="card-sub">三套主题各配一种水果意象：<strong>赤橙</strong>暖橙、<strong>青蔗</strong>钢灰、<strong>碧提</strong>青提。桌面程序中「碧提」会让窗口真正半透明，露出桌面壁纸。</p>
+          <div class="field">
+            <label for="theme-select">主题</label>
+            <select id="theme-select">
+              <option value="dark">赤橙 · 暖橙主题</option>
+              <option value="light">青蔗 · 钢灰主题</option>
+              <option value="transparent">碧提 · 青提主题</option>
+            </select>
+          </div>
+          <p class="hint" style="font-size:11px;color:var(--text-faint)">
+            也可以在右上角用图标快速切换。
+          </p>
+        </div>
+
+        <div class="card">
+          <h3>安全说明</h3>
+          <p class="card-sub">三道防线，任何一道不通过就不会删除。</p>
+          <div class="legend">
+            <div class="legend-item">
+              <span class="legend-dot" style="background:var(--safe)"></span>
+              <div><strong>安全</strong>：删了会自动重建，可一键清理</div>
+            </div>
+            <div class="legend-item">
+              <span class="legend-dot" style="background:var(--caution)"></span>
+              <div><strong>需确认</strong>：会重新下载或首次启动变慢，需要你勾选</div>
+            </div>
+            <div class="legend-item">
+              <span class="legend-dot" style="background:var(--danger)"></span>
+              <div><strong>高风险</strong>：可能含你要找的数据，必须单独确认</div>
+            </div>
+            <div class="legend-item">
+              <span class="legend-dot" style="background:var(--text-faint)"></span>
+              <div>永远不会碰：文档、桌面、下载、浏览器密码、系统文件</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="card">
+          <h3>日志与数据</h3>
+          <p class="card-sub">所有清理操作都会写入审计日志。</p>
+          <div class="field">
+            <label>日志目录</label>
+            <input type="text" id="log-path" readonly value="%LOCALAPPDATA%\CacheSweep\logs" />
+          </div>
+          <div class="field">
+            <label>偏好设置</label>
+            <input type="text" id="pref-path" readonly value="%APPDATA%\CacheSweep\preferences.json" />
+          </div>
+          <button id="btn-show-audit" class="btn ghost sm">查看最近操作</button>
+        </div>
+
+        <div class="card">
+          <h3>关于</h3>
+          <p class="card-sub">
+            CacheSweep · MIT License<br />
+            磁盘体检与安全清理工具，默认只读。<br />
+            以普通用户权限运行，不请求管理员提权。
+          </p>
+          <div id="about-version" style="font-size:12px;color:var(--text-faint);font-family:var(--font-mono)"></div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer>
+    <span>CacheSweep · MIT License</span>
+    <a href="/api/targets" target="_blank" rel="noopener">规则 JSON</a>
+    <a href="/api/health" target="_blank" rel="noopener">服务状态</a>
+    <span id="status" class="status"></span>
+  </footer>
+
+  <div class="modal" id="confirm-modal" hidden>
+    <div class="modal-box" role="dialog" aria-modal="true" aria-labelledby="modal-title">
+      <h2 id="modal-title">确认清理</h2>
+      <div id="modal-body"></div>
+      <div class="modal-actions">
+        <button id="modal-cancel" class="btn ghost">取消</button>
+        <button id="modal-ok" class="btn danger">确认执行</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="/js/rules.js"></script>
+  <script src="/js/app.js"></script>
+</body>
+</html>

@@ -1,0 +1,21 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <RootNamespace>CacheSweep.Core</RootNamespace>
+    <AssemblyName>CacheSweep.Core</AssemblyName>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <EmbeddedResource Include="Rules\builtin-rules.json" LogicalName="CacheSweep.Core.Rules.builtin-rules.json" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- Recycle Bin file/directory handling lives in the VB helper namespace. -->
+    <PackageReference Include="Microsoft.VisualBasic" Version="10.3.0" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="CacheSweep.Core.Tests" />
+  </ItemGroup>
+
+</Project>
