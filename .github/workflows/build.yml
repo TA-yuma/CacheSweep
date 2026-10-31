@@ -19,10 +19,15 @@ jobs:
           # Windows gets the full solution, including the WinForms tray shell.
           - os: windows-latest
             solution: CacheSweep.sln
+            run_tests: true
           # Linux can only build the cross-platform projects: the desktop shell
           # is net8.0-windows + WinForms and cannot be restored here.
           - os: ubuntu-latest
             solution: CacheSweep.CrossPlatform.slnf
+            # The safety-policy tests assert on Windows path semantics
+            # (%TEMP%, %WINDIR%, drive roots), so they only run on Windows.
+            # Linux still builds everything to catch compile regressions.
+            run_tests: false
     steps:
       - uses: actions/checkout@v4
 
@@ -37,6 +42,7 @@ jobs:
         run: dotnet build ${{ matrix.solution }} --no-restore -c Release
 
       - name: Test
+        if: matrix.run_tests
         run: dotnet test ${{ matrix.solution }} --no-build -c Release
 
   package:
