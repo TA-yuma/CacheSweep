@@ -1,0 +1,11 @@
+{
+  "solution": {
+    "path": "CacheSweep.sln",
+    "projects": [
+      "src\\CacheSweep.Cli\\CacheSweep.Cli.csproj",
+      "src\\CacheSweep.Core\\CacheSweep.Core.csproj",
+      "src\\CacheSweep.Server\\CacheSweep.Server.csproj",
+      "tests\\CacheSweep.Core.Tests\\CacheSweep.Core.Tests.csproj"
+    ]
+  }
+}

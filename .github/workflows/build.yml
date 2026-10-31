@@ -15,7 +15,14 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [windows-latest, ubuntu-latest]
+        include:
+          # Windows gets the full solution, including the WinForms tray shell.
+          - os: windows-latest
+            solution: CacheSweep.sln
+          # Linux can only build the cross-platform projects: the desktop shell
+          # is net8.0-windows + WinForms and cannot be restored here.
+          - os: ubuntu-latest
+            solution: CacheSweep.CrossPlatform.slnf
     steps:
       - uses: actions/checkout@v4
 
@@ -24,13 +31,13 @@ jobs:
           dotnet-version: '8.0.x'
 
       - name: Restore
-        run: dotnet restore
+        run: dotnet restore ${{ matrix.solution }}
 
       - name: Build
-        run: dotnet build --no-restore -c Release
+        run: dotnet build ${{ matrix.solution }} --no-restore -c Release
 
       - name: Test
-        run: dotnet test --no-build -c Release
+        run: dotnet test ${{ matrix.solution }} --no-build -c Release
 
   package:
     name: Package win-x64
