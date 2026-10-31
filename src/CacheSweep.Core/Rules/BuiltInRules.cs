@@ -1,5 +1,6 @@
 using System.Text.Json;
 using CacheSweep.Core.Models;
+using CacheSweep.Core.Plugins;
 
 namespace CacheSweep.Core.Rules;
 
@@ -78,6 +79,32 @@ public static class BuiltInRules
                 }
 
                 extras.Add(custom);
+            }
+
+            // Installed plugins contribute their rules; everything else stays out
+            // entirely, which is what makes "uninstalled" cost nothing.
+            foreach (var plugin in PluginCatalog.All)
+            {
+                var installed = preferences.InstalledPlugins
+                    .Contains(plugin.Id, StringComparer.OrdinalIgnoreCase);
+                var disabled = preferences.DisabledPlugins
+                    .Contains(plugin.Id, StringComparer.OrdinalIgnoreCase);
+
+                if (!installed || disabled)
+                {
+                    continue;
+                }
+
+                foreach (var rule in plugin.Rules)
+                {
+                    if (rule.Id is not null && !knownIds.Add(rule.Id))
+                    {
+                        rejected?.Add((rule.Id, "Duplicate rule id from a plugin."));
+                        continue;
+                    }
+
+                    extras.Add(rule);
+                }
             }
         }
 

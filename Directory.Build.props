@@ -6,10 +6,18 @@
     <LangVersion>latest</LangVersion>
     <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
     <EnforceCodeStyleInBuild>false</EnforceCodeStyleInBuild>
-    <Version>0.1.0</Version>
+
+    <!-- Version is surfaced in Settings > About and checked against GitHub
+         Releases by /api/update/check. -->
+    <Version>1.0.1</Version>
+    <AssemblyVersion>1.0.1.0</AssemblyVersion>
+    <FileVersion>1.0.1.0</FileVersion>
+    <InformationalVersion>1.0.1</InformationalVersion>
+
     <Authors>CacheSweep Contributors</Authors>
     <Product>CacheSweep</Product>
     <RepositoryType>git</RepositoryType>
+    <RepositoryUrl>https://github.com/TA-yuma/CacheSweep</RepositoryUrl>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
   </PropertyGroup>
 </Project>

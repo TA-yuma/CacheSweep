@@ -83,6 +83,13 @@ internal static class Program
     }
 }
 
+/// <summary>Which window the tray is currently showing.</summary>
+internal enum AppMode
+{
+    Full,
+    Compact,
+}
+
 /// <summary>Tray icon, menu, window and server supervision.</summary>
 internal sealed class TrayContext : ApplicationContext
 {
@@ -96,6 +103,10 @@ internal sealed class TrayContext : ApplicationContext
     private readonly bool _startHidden;
 
     private MainWindow? _window;
+    private CompactWindow? _compact;
+    private ToolStripMenuItem? _modeFull;
+    private ToolStripMenuItem? _modeCompact;
+    private AppMode _mode = AppMode.Full;
     private Process? _server;
     private bool _exiting;
 
@@ -112,7 +123,19 @@ internal sealed class TrayContext : ApplicationContext
         _menu.Items.Add(new ToolStripSeparator());
         _menu.Items.Add(new ToolStripMenuItem("打开 CacheSweep", null, (_, _) => ShowWindow()));
         _menu.Items.Add(new ToolStripMenuItem("立即体检", null, (_, _) => ShowWindow("/?scan=1")));
+        // Mode switching: full window vs a compact always-on-top toolbar.
+        _modeFull = new ToolStripMenuItem("窗口模式：完整", null, (_, _) => SetMode(AppMode.Full))
+        {
+            Checked = true,
+        };
+        _modeCompact = new ToolStripMenuItem("窗口模式：悬浮工具栏", null, (_, _) => SetMode(AppMode.Compact));
+
+        var modeMenu = new ToolStripMenuItem("窗口模式");
+        modeMenu.DropDownItems.Add(_modeFull);
+        modeMenu.DropDownItems.Add(_modeCompact);
+
         _menu.Items.Add(new ToolStripMenuItem("在浏览器中打开", null, (_, _) => OpenInBrowser()));
+        _menu.Items.Add(modeMenu);
         _menu.Items.Add(new ToolStripSeparator());
         _menu.Items.Add(new ToolStripMenuItem("打开日志目录", null, (_, _) => OpenLogs()));
         _menu.Items.Add(new ToolStripMenuItem("关于…", null, (_, _) => ShowAbout()));
@@ -160,6 +183,54 @@ internal sealed class TrayContext : ApplicationContext
                 ShowBalloon("CacheSweep 仍在后台运行，双击托盘图标可重新打开。", ToolTipIcon.Info);
             }
         };
+    }
+
+    /// <summary>
+    /// Switches between the full window and the compact floating toolbar.
+    /// Both share the same server, so nothing restarts.
+    /// </summary>
+    private void SetMode(AppMode mode)
+    {
+        _mode = mode;
+
+        if (_modeFull is not null) _modeFull.Checked = mode == AppMode.Full;
+        if (_modeCompact is not null) _modeCompact.Checked = mode == AppMode.Compact;
+
+        if (mode == AppMode.Compact)
+        {
+            _window?.Hide();
+            ShowCompact();
+        }
+        else
+        {
+            _compact?.Hide();
+            ShowWindow();
+        }
+    }
+
+    private void ShowCompact()
+    {
+        if (_compact is { IsDisposed: false })
+        {
+            _compact.Show();
+            _compact.BringToFront();
+            _compact.Activate();
+            return;
+        }
+
+        _compact = new CompactWindow(_url, () => SetMode(AppMode.Full));
+
+        // Closing the compact window keeps the app alive in the tray.
+        _compact.FormClosing += (_, e) =>
+        {
+            if (!_exiting)
+            {
+                e.Cancel = true;
+                _compact?.Hide();
+            }
+        };
+
+        _compact.Show();
     }
 
     private void ShowWindow(string path = "/")
@@ -272,7 +343,8 @@ internal sealed class TrayContext : ApplicationContext
 
         if (!_startHidden)
         {
-            ShowWindow();
+            // Honour the last mode the user picked.
+            SetMode(_mode);
         }
         else
         {
@@ -492,6 +564,7 @@ internal sealed class TrayContext : ApplicationContext
             _http.Dispose();
             _tray.Dispose();
             _window?.Dispose();
+            _compact?.Dispose();
             _server?.Dispose();
         }
 

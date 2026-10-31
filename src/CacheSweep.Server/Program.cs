@@ -26,6 +26,9 @@ if (!url.Contains("127.0.0.1") && !url.Contains("localhost"))
 
 builder.WebHost.UseUrls(url);
 builder.Services.AddSingleton<SweepService>();
+// Drives automatic cleanup on a timer; runs only while the server is up.
+// Same in desktop and web mode: the tray shell keeps the server alive.
+builder.Services.AddHostedService<AutoCleanWorker>();
 builder.Services.AddHostedService<StartupOpenBrowser>();
 builder.Services.ConfigureHttpJsonOptions(o =>
 {

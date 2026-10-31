@@ -23,6 +23,27 @@ public sealed class UserPreferences
     /// <summary>Last selected theme: "dark" | "light" | "transparent".</summary>
     public string Theme { get; set; } = "dark";
 
+    /// <summary>UI language: "zh" | "en" | "ru".</summary>
+    public string Language { get; set; } = "zh";
+
+    /// <summary>
+    /// Plugins the user installed. Uninstalled plugins contribute no rules, so
+    /// their folders are never scanned.
+    /// </summary>
+    public List<string> InstalledPlugins { get; set; } = new();
+
+    /// <summary>Installed plugins the user temporarily disabled.</summary>
+    public List<string> DisabledPlugins { get; set; } = new();
+
+    /// <summary>Automatic cleanup configuration.</summary>
+    public AutoCleanSettings AutoClean { get; set; } = new();
+
+    /// <summary>Launch CacheSweep in the tray at Windows sign-in.</summary>
+    public bool StartWithWindows { get; set; }
+
+    /// <summary>When starting with Windows, do not pop the window open.</summary>
+    public bool StartMinimized { get; set; } = true;
+
     private static readonly JsonSerializerOptions Options = new()
     {
         PropertyNameCaseInsensitive = true,

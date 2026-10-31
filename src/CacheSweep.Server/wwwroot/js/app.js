@@ -174,7 +174,7 @@ function notifyHost(theme) {
 /* ---------------- views ---------------- */
 
 function showView(name) {
-  for (const v of ["sweep", "disk", "rules", "settings"]) {
+  for (const v of ["sweep", "disk", "rules", "plugins", "settings"]) {
     $(`view-${v}`).hidden = v !== name;
   }
   document.querySelectorAll(".nav button").forEach((b) => {

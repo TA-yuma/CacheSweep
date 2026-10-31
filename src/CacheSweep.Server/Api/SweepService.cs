@@ -1,6 +1,8 @@
 using System.Text.Json;
+using CacheSweep.Core.Automation;
 using CacheSweep.Core.Cleaning;
 using CacheSweep.Core.Models;
+using CacheSweep.Core.Plugins;
 using CacheSweep.Core.Rules;
 using CacheSweep.Core.Scanning;
 
@@ -305,6 +307,256 @@ public sealed class SweepService
     public static (long FreeBytes, long TotalBytes) GetDriveSpace(string driveRoot)
         => DiskInventory.GetDriveSpace(driveRoot);
 
+    /* ---------------- plugins ---------------- */
+
+    /// <summary>Catalogue plus install state, for the plugins page.</summary>
+    public IReadOnlyList<PluginInfo> GetPlugins()
+    {
+        lock (_gate)
+        {
+            return PluginCatalog.All.Select(p =>
+            {
+                var installed = _preferences.InstalledPlugins
+                    .Contains(p.Id, StringComparer.OrdinalIgnoreCase);
+                var disabled = _preferences.DisabledPlugins
+                    .Contains(p.Id, StringComparer.OrdinalIgnoreCase);
+
+                return new PluginInfo(
+                    p.Id,
+                    p.Name,
+                    p.Description,
+                    p.Icon,
+                    installed,
+                    disabled,
+                    p.Rules.Count,
+                    DetectTargets(p));
+            }).ToList();
+        }
+    }
+
+    /// <summary>
+    /// Which folders a plugin would clean and whether they exist here, so the
+    /// UI can say "requires the app" instead of offering a useless install.
+    /// </summary>
+    private static IReadOnlyList<string> DetectTargets(PluginDescriptor plugin)
+    {
+        return plugin.Rules
+            .Select(r => r.Path)
+            .Where(p => !string.IsNullOrWhiteSpace(p))
+            .Select(p => Environment.ExpandEnvironmentVariables(p!))
+            .Where(Directory.Exists)
+            .Take(4)
+            .ToList();
+    }
+
+    public bool InstallPlugin(string id)
+    {
+        var plugin = PluginCatalog.Find(id);
+        if (plugin is null)
+        {
+            return false;
+        }
+
+        lock (_gate)
+        {
+            if (!_preferences.InstalledPlugins.Contains(plugin.Id, StringComparer.OrdinalIgnoreCase))
+            {
+                _preferences.InstalledPlugins.Add(plugin.Id);
+            }
+
+            _preferences.DisabledPlugins.RemoveAll(
+                d => d.Equals(plugin.Id, StringComparison.OrdinalIgnoreCase));
+
+            PersistPreferences();
+            _targets = null;
+            _lastReport = null;
+            Log($"plugin installed: {plugin.Id} ({plugin.Rules.Count} rules)");
+        }
+
+        return true;
+    }
+
+    public bool UninstallPlugin(string id)
+    {
+        lock (_gate)
+        {
+            var removed = _preferences.InstalledPlugins.RemoveAll(
+                p => p.Equals(id, StringComparison.OrdinalIgnoreCase)) > 0;
+
+            _preferences.DisabledPlugins.RemoveAll(
+                d => d.Equals(id, StringComparison.OrdinalIgnoreCase));
+
+            if (removed)
+            {
+                PersistPreferences();
+                _targets = null;
+                _lastReport = null;
+                Log($"plugin uninstalled: {id}");
+            }
+
+            return removed;
+        }
+    }
+
+    public bool SetPluginEnabled(string id, bool enabled)
+    {
+        if (PluginCatalog.Find(id) is null)
+        {
+            return false;
+        }
+
+        lock (_gate)
+        {
+            if (!_preferences.InstalledPlugins.Contains(id, StringComparer.OrdinalIgnoreCase))
+            {
+                return false;
+            }
+
+            _preferences.DisabledPlugins.RemoveAll(
+                d => d.Equals(id, StringComparison.OrdinalIgnoreCase));
+
+            if (!enabled)
+            {
+                _preferences.DisabledPlugins.Add(id);
+            }
+
+            PersistPreferences();
+            _targets = null;
+            _lastReport = null;
+            Log($"plugin {id}: {(enabled ? "enabled" : "disabled")}");
+        }
+
+        return true;
+    }
+
+    /* ---------------- automation ---------------- */
+
+    public AutoCleanSettings GetAutoClean()
+    {
+        lock (_gate)
+        {
+            return _preferences.AutoClean;
+        }
+    }
+
+    public AutoCleanSettings UpdateAutoClean(AutoCleanSettings settings)
+    {
+        lock (_gate)
+        {
+            _preferences.AutoClean = settings;
+            PersistPreferences();
+            Log($"auto-clean: enabled={settings.Enabled} freq={settings.Frequency} "
+                + $"at={settings.TimeOfDay}");
+            return _preferences.AutoClean;
+        }
+    }
+
+    /// <summary>Runs automatic cleanup now, regardless of schedule.</summary>
+    public AutoCleanRecord RunAutoCleanNow()
+    {
+        var settings = GetAutoClean();
+        var record = new AutoCleanScheduler(() => Targets, Log).Run(settings, DateTimeOffset.Now);
+
+        lock (_gate)
+        {
+            if (!record.Skipped)
+            {
+                _preferences.AutoClean.LastRunUtc = record.RanAt;
+                _preferences.AutoClean.LastRunFreedBytes = record.FreedBytes;
+                PersistPreferences();
+                _lastReport = null;
+            }
+        }
+
+        return record;
+    }
+
+    /// <summary>
+    /// Called by the background service on a timer. Returns the record when a
+    /// run happened, null when nothing was due.
+    /// </summary>
+    public AutoCleanRecord? TickAutoClean()
+    {
+        var settings = GetAutoClean();
+        var scheduler = new AutoCleanScheduler(() => Targets, Log);
+        var now = DateTimeOffset.Now;
+
+        if (!AutoCleanScheduler.IsDue(settings, now))
+        {
+            return null;
+        }
+
+        var record = scheduler.Run(settings, now);
+
+        lock (_gate)
+        {
+            if (!record.Skipped)
+            {
+                _preferences.AutoClean.LastRunUtc = record.RanAt;
+                _preferences.AutoClean.LastRunFreedBytes = record.FreedBytes;
+                PersistPreferences();
+                _lastReport = null;
+            }
+        }
+
+        return record;
+    }
+
+    /* ---------------- startup ---------------- */
+
+    public (bool Enabled, string? Command) GetStartup()
+    {
+        if (!OperatingSystem.IsWindows())
+        {
+            return (false, null);
+        }
+
+        return (StartupManager.IsEnabled(), StartupManager.CurrentCommand());
+    }
+
+    /// <summary>
+    /// Toggles the Run-key entry. <paramref name="exePath"/> is the tray shell
+    /// when the caller knows it; otherwise the server falls back to its sibling.
+    /// </summary>
+    public bool SetStartup(bool enabled, string? exePath, bool startMinimized)
+    {
+        if (!OperatingSystem.IsWindows())
+        {
+            return false;
+        }
+
+        lock (_gate)
+        {
+            _preferences.StartWithWindows = enabled;
+            _preferences.StartMinimized = startMinimized;
+            PersistPreferences();
+        }
+
+        if (!enabled)
+        {
+            var ok = StartupManager.Disable();
+            Log($"autostart disabled: {ok}");
+            return ok;
+        }
+
+        var target = exePath;
+        if (string.IsNullOrWhiteSpace(target))
+        {
+            // The tray shell sits beside the server in a normal install.
+            var sibling = Path.Combine(AppContext.BaseDirectory, "CacheSweep.exe");
+            target = File.Exists(sibling) ? sibling : Environment.ProcessPath;
+        }
+
+        if (string.IsNullOrWhiteSpace(target))
+        {
+            return false;
+        }
+
+        var result = StartupManager.Enable(target, startMinimized);
+        Log($"autostart enabled={result} path={target}");
+        return result;
+    }
+
     /* ---------------- preferences + audit ---------------- */
 
     public void SetTheme(string theme)
@@ -324,6 +576,28 @@ public sealed class SweepService
             }
 
             _preferences.Theme = normalized;
+            PersistPreferences();
+        }
+    }
+
+    /// <summary>Switches the UI language. Persisted so the next launch matches.</summary>
+    public void SetLanguage(string language)
+    {
+        var normalized = language.ToLowerInvariant() switch
+        {
+            "en" => "en",
+            "ru" => "ru",
+            _ => "zh",
+        };
+
+        lock (_gate)
+        {
+            if (_preferences.Language == normalized)
+            {
+                return;
+            }
+
+            _preferences.Language = normalized;
             PersistPreferences();
         }
     }
@@ -382,3 +656,20 @@ public sealed record CleanRequest(
 public sealed record ToggleRequest(IReadOnlyList<string> TargetIds, bool Enabled);
 
 public sealed record ThemeRequest(string Theme);
+/// <summary>Plugin catalogue entry plus this machine's install state.</summary>
+public sealed record PluginInfo(
+    string Id,
+    string Name,
+    string Description,
+    string Icon,
+    bool Installed,
+    bool Disabled,
+    int RuleCount,
+    IReadOnlyList<string> DetectedPaths)
+{
+    public bool Enabled => Installed && !Disabled;
+}
+
+public sealed record PluginToggleRequest(string Id, bool Enabled);
+
+public sealed record StartupRequest(bool Enabled, bool StartMinimized, string? ExePath);

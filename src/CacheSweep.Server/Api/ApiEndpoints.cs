@@ -19,6 +19,8 @@ public static class ApiEndpoints
         MapScanAndClean(api);
         MapPreferences(api);
         MapInventory(api);
+        MapPlugins(api);
+        MapAutomation(api);
     }
 
     private static void MapHealth(RouteGroupBuilder api) =>
@@ -26,7 +28,7 @@ public static class ApiEndpoints
         {
             status = "ok",
             app = "CacheSweep",
-            version = typeof(ApiEndpoints).Assembly.GetName().Version?.ToString(),
+            version = UpdateChecker.CurrentVersion,
             os = Environment.OSVersion.VersionString,
             webview = Environment.GetEnvironmentVariable("CACHESWEEP_EMBEDDED") == "1",
         }));
@@ -228,6 +230,87 @@ public static class ApiEndpoints
 
         api.MapGet("/audit", (SweepService service) => Results.Ok(service.GetAuditLog().TakeLast(200)));
     }
+
+    private static void MapPlugins(RouteGroupBuilder api)
+    {
+        api.MapGet("/plugins", (SweepService service) => Results.Ok(new
+        {
+            plugins = service.GetPlugins(),
+        }));
+
+        api.MapPost("/plugins/install", (PluginToggleRequest request, SweepService service) =>
+            service.InstallPlugin(request.Id)
+                ? Results.Ok(new { installed = request.Id, plugins = service.GetPlugins() })
+                : Results.NotFound(new { error = $"Unknown plugin: {request.Id}" }));
+
+        api.MapPost("/plugins/uninstall", (PluginToggleRequest request, SweepService service) =>
+            service.UninstallPlugin(request.Id)
+                ? Results.Ok(new { uninstalled = request.Id, plugins = service.GetPlugins() })
+                : Results.NotFound(new { error = $"Plugin not installed: {request.Id}" }));
+
+        api.MapPost("/plugins/enable", (PluginToggleRequest request, SweepService service) =>
+            service.SetPluginEnabled(request.Id, request.Enabled)
+                ? Results.Ok(new { plugins = service.GetPlugins() })
+                : Results.BadRequest(new { error = "Plugin is not installed." }));
+    }
+
+    private static void MapAutomation(RouteGroupBuilder api)
+    {
+        api.MapGet("/autoclean", (SweepService service) => Results.Ok(service.GetAutoClean()));
+
+        api.MapPost("/autoclean", (AutoCleanSettings settings, SweepService service) =>
+            Results.Ok(service.UpdateAutoClean(settings)));
+
+        // "Run now": performs a real cleanup of cache-only rules, bypassing the
+        // schedule. Still restricted to the cache allow-list.
+        api.MapPost("/autoclean/run", async (SweepService service, CancellationToken ct) =>
+        {
+            var record = await Task.Run(service.RunAutoCleanNow, ct);
+            return Results.Ok(new
+            {
+                record.RanAt,
+                record.FreedBytes,
+                record.DeletedFiles,
+                record.Failures,
+                record.Skipped,
+                record.Reason,
+            });
+        });
+
+        api.MapGet("/startup", (SweepService service) =>
+        {
+            var (enabled, command) = service.GetStartup();
+            return Results.Ok(new { enabled, command });
+        });
+
+        api.MapPost("/startup", (StartupRequest request, SweepService service) =>
+        {
+            var ok = service.SetStartup(request.Enabled, request.ExePath, request.StartMinimized);
+            return ok
+                ? Results.Ok(new { enabled = request.Enabled })
+                : Results.BadRequest(new { error = "Could not change autostart setting." });
+        });
+
+        api.MapGet("/version", () => Results.Ok(new
+        {
+            version = UpdateChecker.CurrentVersion,
+            repo = "https://github.com/TA-yuma/CacheSweep",
+        }));
+
+        // Opt-in only: the UI calls this when the user presses "check now".
+        api.MapGet("/update/check", async (CancellationToken ct) =>
+        {
+            var result = await new UpdateChecker().CheckAsync(null, ct);
+            return Results.Ok(result);
+        });
+
+        api.MapPost("/preferences/language", (ThemeRequest request, SweepService service) =>
+        {
+            service.SetLanguage(request.Theme ?? "zh");
+            return Results.Ok(new { language = request.Theme });
+        });
+    }
+
 
     private static void MapInventory(RouteGroupBuilder api)
     {

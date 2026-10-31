@@ -64,10 +64,13 @@ body::before {
   background: var(--panel);
   backdrop-filter: var(--backdrop);
   -webkit-backdrop-filter: var(--backdrop);
-  /* Pinned to the top of the viewport for the whole session: the tab bar is the
-     primary navigation and must never scroll away. */
-  position: sticky;
+  /* Fixed rather than sticky: sticky depends on every ancestor avoiding
+     transform/filter/animation, which is easy to break later. Fixed is
+     unconditional. main reserves the matching top offset below. */
+  position: fixed;
   top: 0;
+  left: 0;
+  right: 0;
   z-index: 100;
   /* A solid-ish fallback so content scrolling under the header never shows
      through in themes where backdrop-filter is unavailable. */
@@ -274,13 +277,16 @@ body::before {
 main {
   /* Replaces the old `flex: 1` on the flex-column body: keeps the footer at the
      bottom on short pages without relying on flexbox. */
-  min-height: calc(100vh - 132px);
+  padding-top: calc(var(--topbar-h, 66px) + 16px);
+  min-height: 100vh;
   width: 100%;
   max-width: 1240px;
   margin: 0 auto;
   padding: 16px 24px 52px;
 }
 
+/* Opacity-only entrance: a transform here would create a containing block and
+   break the sticky toolbar inside the view. */
 .view { animation: fadeIn 0.22s var(--ease); }
 @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
 
@@ -1651,3 +1657,436 @@ body::after {
   border-radius: 0;
   background: transparent;
 }
+/* ==========================================================================
+   Plugins and automation
+   ========================================================================== */
+
+.plugin-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  gap: 11px;
+}
+
+.plugin-card {
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+  padding: 15px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface-1);
+  box-shadow: var(--shadow-panel);
+  transition: border-color 0.15s, background 0.15s;
+}
+
+.plugin-card:hover { border-color: var(--border-strong); }
+
+/* Installed plugins get an accent left edge; disabled ones recede. */
+.plugin-card.is-installed { border-left: 3px solid var(--accent); }
+.plugin-card.is-disabled { opacity: 0.62; border-left-color: var(--text-faint); }
+
+.plugin-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.plugin-icon {
+  width: 34px;
+  height: 34px;
+  border-radius: var(--radius-sm);
+  display: grid;
+  place-items: center;
+  font-size: 18px;
+  background: var(--surface-3);
+  border: 1px solid var(--hairline);
+  flex: none;
+}
+
+.plugin-name {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text);
+}
+
+.plugin-sub {
+  font-size: 10.5px;
+  color: var(--text-faint);
+  margin-top: 1px;
+}
+
+.plugin-desc {
+  font-size: 11px;
+  color: var(--text-dim);
+  line-height: 1.6;
+}
+
+.plugin-paths {
+  font-family: var(--font-mono);
+  font-size: 9.5px;
+  color: var(--text-faint);
+  line-height: 1.7;
+  max-height: 46px;
+  overflow: hidden;
+}
+
+.plugin-actions {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin-top: auto;
+  padding-top: 4px;
+}
+
+.plugin-actions .spacer { flex: 1; }
+
+/* State pill: weight carries meaning, colour only tints it. */
+.plugin-state {
+  font-size: 9.5px;
+  font-weight: 700;
+  letter-spacing: 0.6px;
+  text-transform: uppercase;
+  padding: 2px 7px;
+  border-radius: 2px;
+  border: 1px solid var(--border);
+  color: var(--text-faint);
+}
+
+.plugin-state.on { color: var(--accent); border-color: var(--accent-line); }
+.plugin-state.off { color: var(--text-faint); border-color: var(--border); }
+
+/* Read-only scope chip in the automation card. */
+.scope-chip {
+  font-size: 11.5px;
+  color: var(--text-dim);
+  padding: 7px 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface-2);
+}
+
+/* Time input matches the other fields. */
+#auto-time {
+  font-family: var(--font-mono);
+  letter-spacing: 1px;
+}
+/* ==========================================================================
+   Compact toolbar mode (?mode=compact)
+
+   A small always-on-top strip: drive gauge, reclaimable total, quick clean.
+   The body is fully replaced by compact.js, so every rule here is scoped to
+   .compact-body to avoid leaking into the full UI.
+   ========================================================================== */
+
+body.compact-body {
+  margin: 0;
+  padding: 0;
+  background: var(--bg);
+  overflow: hidden;
+  height: 100vh;
+}
+
+body.compact-body::before,
+body.compact-body::after {
+  display: none;
+}
+
+.compact-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px 11px;
+  height: 100vh;
+  box-sizing: border-box;
+}
+
+/* Drive gauge */
+.compact-drive {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.compact-drive-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  font-size: 11px;
+  color: var(--text-dim);
+}
+
+.compact-drive-name {
+  font-size: 12.5px;
+  font-weight: 800;
+  color: var(--text);
+  letter-spacing: 0.4px;
+}
+
+.compact-drive-free {
+  font-variant-numeric: tabular-nums;
+  color: var(--text-faint);
+}
+
+.compact-bar {
+  height: 5px;
+  border-radius: 2px;
+  background: var(--surface-4);
+  overflow: hidden;
+}
+
+.compact-bar span {
+  display: block;
+  height: 100%;
+  border-radius: 2px;
+  background: linear-gradient(90deg, var(--accent-dim, var(--accent)), var(--accent));
+  transition: width 0.4s var(--ease);
+}
+
+/* Reclaimable total */
+.compact-stat {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  padding: 7px 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface-1);
+}
+
+.compact-stat-label {
+  font-size: 9.5px;
+  letter-spacing: 1.1px;
+  text-transform: uppercase;
+  color: var(--text-faint);
+}
+
+.compact-stat-value {
+  margin-left: auto;
+  font-size: 17px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  color: var(--accent);
+}
+
+/* Actions */
+.compact-actions {
+  display: flex;
+  gap: 6px;
+}
+
+.compact-actions .btn {
+  flex: 1;
+  justify-content: center;
+}
+
+.compact-actions .compact-expand {
+  flex: 0 0 34px;
+  padding: 4px 0;
+  font-size: 13px;
+}
+
+.compact-status {
+  margin-top: auto;
+  font-size: 10px;
+  color: var(--text-faint);
+  font-family: var(--font-mono);
+  letter-spacing: 0.3px;
+  min-height: 14px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+/* ==========================================================================
+   Click feedback
+
+   --feedback-level is set by feedback.js from the settings slider:
+     0 = off, 1 = normal, 2 = strong
+   The press dip and the ripple both scale with it.
+   ========================================================================== */
+
+:root {
+  --feedback-level: 1;
+}
+
+/* The ripple layer. Colour comes from the theme accent so it reads on every
+   palette without introducing a new hue. */
+.click-ripple {
+  position: absolute;
+  border-radius: 50%;
+  pointer-events: none;
+  transform: scale(0);
+  background: radial-gradient(
+    circle,
+    color-mix(in srgb, var(--accent) 70%, transparent) 0%,
+    color-mix(in srgb, var(--accent) 22%, transparent) 55%,
+    transparent 72%
+  );
+  animation: rippleOut 520ms var(--ease) forwards;
+  z-index: 0;
+}
+
+@keyframes rippleOut {
+  from {
+    transform: scale(0);
+    opacity: var(--ripple-start, 0.3);
+  }
+  to {
+    transform: scale(1);
+    opacity: 0;
+  }
+}
+
+/* Press dip: a small scale-down that reads as tactile without being jumpy. */
+.is-pressing {
+  transform: scale(calc(1 - 0.012 * var(--feedback-level)));
+  transition: transform 80ms var(--ease);
+}
+
+/* Rows that already animate on hover keep their transform; only opacity dips. */
+.row.is-pressing,
+.app-row.is-pressing,
+.app-line.is-pressing,
+.chk.is-pressing {
+  transform: none;
+  filter: brightness(calc(1 + 0.08 * var(--feedback-level)));
+}
+
+/* When feedback is off, remove every trace of the effect. */
+html.no-feedback .click-ripple { display: none; }
+html.no-feedback .is-pressing { transform: none; filter: none; }
+
+/* Ripple hosts must clip; cards and rows are the common cases. */
+.row,
+.app-row,
+.app-card,
+.app-line,
+.drive-card,
+.plugin-card {
+  overflow: hidden;
+}
+
+/* ==========================================================================
+   Range slider (feedback strength)
+   ========================================================================== */
+
+.range-field {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  margin-bottom: 6px;
+}
+
+.range-field input[type="range"] {
+  flex: 1;
+  appearance: none;
+  height: 4px;
+  border-radius: 2px;
+  background: linear-gradient(
+    90deg,
+    var(--accent) 0%,
+    var(--accent) calc(var(--range-pct, 50%) ),
+    var(--surface-4) calc(var(--range-pct, 50%)),
+    var(--surface-4) 100%
+  );
+  outline: none;
+  cursor: pointer;
+}
+
+.range-field input[type="range"]::-webkit-slider-thumb {
+  appearance: none;
+  width: 15px;
+  height: 15px;
+  border-radius: 50%;
+  background: var(--accent);
+  border: 2px solid var(--bg-elev, #0a0e14);
+  box-shadow: 0 0 0 1px var(--accent-line), var(--shadow-1);
+  cursor: grab;
+  transition: transform 0.12s var(--ease);
+}
+
+.range-field input[type="range"]::-webkit-slider-thumb:active {
+  cursor: grabbing;
+  transform: scale(1.15);
+}
+
+.range-field input[type="range"]::-moz-range-thumb {
+  width: 15px;
+  height: 15px;
+  border-radius: 50%;
+  background: var(--accent);
+  border: 2px solid var(--bg-elev, #0a0e14);
+  cursor: grab;
+}
+
+.range-value {
+  min-width: 46px;
+  text-align: right;
+  font-size: 11px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: var(--accent);
+}
+
+.range-ticks {
+  display: flex;
+  justify-content: space-between;
+  font-size: 9.5px;
+  color: var(--text-faint);
+  padding: 0 2px;
+}
+/* ==========================================================================
+   Version and update check
+   ========================================================================== */
+
+.version-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  padding: 8px 11px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface-2);
+  margin-bottom: 9px;
+}
+
+.version-label {
+  font-size: 10px;
+  letter-spacing: 1.1px;
+  text-transform: uppercase;
+  color: var(--text-faint);
+}
+
+.version-value {
+  font-family: var(--font-mono);
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--accent);
+  letter-spacing: 0.5px;
+}
+
+/* Update result banner: tone follows the outcome. */
+.update-result {
+  font-size: 11.5px;
+  line-height: 1.6;
+  padding: 8px 11px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+  border-left-width: 3px;
+  background: var(--surface-2);
+  color: var(--text-dim);
+}
+
+.update-result.ok { border-left-color: var(--safe); }
+.update-result.new { border-left-color: var(--accent); color: var(--text); }
+.update-result.warn { border-left-color: var(--caution); }
+.update-result.muted { border-left-color: var(--text-faint); }
+
+.update-result a {
+  color: var(--accent);
+  text-decoration: none;
+  font-weight: 600;
+}
+
+.update-result a:hover { text-decoration: underline; }
+
+#btn-check-update.is-busy { opacity: 0.6; cursor: progress; }
