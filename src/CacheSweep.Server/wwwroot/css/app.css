@@ -20,8 +20,10 @@ body {
   background: var(--bg);
   color: var(--text);
   min-height: 100vh;
-  display: flex;
-  flex-direction: column;
+  /* Not a flex/grid container on purpose: a flex column body can make
+     `position: sticky` on the header unreliable, and the header must stay
+     pinned to the top while the page scrolls. */
+  display: block;
   overflow-x: hidden;
   -webkit-font-smoothing: antialiased;
   transition: background 0.25s var(--ease), color 0.2s var(--ease);
@@ -62,9 +64,14 @@ body::before {
   background: var(--panel);
   backdrop-filter: var(--backdrop);
   -webkit-backdrop-filter: var(--backdrop);
+  /* Pinned to the top of the viewport for the whole session: the tab bar is the
+     primary navigation and must never scroll away. */
   position: sticky;
   top: 0;
-  z-index: 20;
+  z-index: 100;
+  /* A solid-ish fallback so content scrolling under the header never shows
+     through in themes where backdrop-filter is unavailable. */
+  box-shadow: 0 1px 0 var(--border), 0 8px 24px -12px rgba(0, 0, 0, 0.55);
 }
 
 /* A single hairline of the accent under the header, nothing more. */
@@ -265,7 +272,9 @@ body::before {
 /* ---------------- layout ---------------- */
 
 main {
-  flex: 1;
+  /* Replaces the old `flex: 1` on the flex-column body: keeps the footer at the
+     bottom on short pages without relying on flexbox. */
+  min-height: calc(100vh - 132px);
   width: 100%;
   max-width: 1240px;
   margin: 0 auto;
@@ -347,9 +356,11 @@ main {
   -webkit-backdrop-filter: var(--backdrop);
   margin-bottom: 12px;
   box-shadow: var(--shadow-panel);
+  /* Sticks just below the pinned header. --topbar-h is measured at runtime by
+     app.js so this keeps working when the header wraps to two lines. */
   position: sticky;
-  top: 66px;
-  z-index: 10;
+  top: var(--topbar-h, 66px);
+  z-index: 90;
 }
 
 [data-theme="transparent"] .toolbar { border-color: var(--border-strong); }
@@ -938,7 +949,7 @@ html.embedded .topbar { position: static; padding: 6px 16px; }
 html.embedded .brand { display: none; }
 html.embedded .actions { width: 100%; justify-content: flex-start; }
 html.embedded .actions .machine { margin-left: auto; }
-html.embedded .toolbar { top: 0; }
+html.embedded .toolbar { top: var(--topbar-h, 0px); }
 html.embedded main { padding-top: 12px; }
 
 /* ---------------- responsive ---------------- */
@@ -951,7 +962,7 @@ html.embedded main { padding-top: 12px; }
 @media (max-width: 980px) {
   .topbar { padding: 9px 14px; flex-wrap: wrap; }
   main { padding: 12px 14px 44px; }
-  .toolbar { top: 62px; }
+  .toolbar { top: var(--topbar-h, 62px); }
   .machine { display: none; }
 }
 
@@ -1159,4 +1170,484 @@ body::after {
 .theme-switch button.active .theme-tip {
   border-color: var(--accent-line);
   color: var(--accent);
+}
+/* ==========================================================================
+   Clean progress panel
+
+   Cleaning tens of thousands of files takes seconds; a silent UI reads as a
+   hang. This panel shows a determinate bar (server sends progress events), the
+   target currently being handled, running byte/file counters, and a short
+   activity log so the user can see exactly what happened.
+   ========================================================================== */
+
+.progress-box {
+  width: min(500px, 100%);
+}
+
+.progress-current {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  font-size: 12.5px;
+  color: var(--text);
+  margin-bottom: 12px;
+  min-height: 20px;
+}
+
+.progress-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--accent);
+  flex: none;
+  animation: pulse 1.2s ease-in-out infinite;
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.45; transform: scale(0.82); }
+}
+
+/* Determinate bar. The fill width is the real completion percentage. */
+.progress-track {
+  height: 6px;
+  background: var(--surface-4);
+  border: 1px solid var(--border);
+  border-radius: 2px;
+  overflow: hidden;
+}
+
+.progress-fill {
+  height: 100%;
+  background: linear-gradient(90deg, var(--accent-dim, var(--accent)), var(--accent));
+  transition: width 0.25s var(--ease);
+  box-shadow: 0 0 10px var(--accent-soft);
+}
+
+.progress-meta {
+  display: flex;
+  justify-content: space-between;
+  font-size: 10.5px;
+  color: var(--text-faint);
+  font-variant-numeric: tabular-nums;
+  margin-top: 6px;
+  letter-spacing: 0.4px;
+}
+
+.progress-stats {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 1px;
+  margin-top: 14px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  overflow: hidden;
+  background: var(--border);
+}
+
+.progress-stat {
+  background: var(--surface-1);
+  padding: 9px 11px;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.progress-stat-label {
+  font-size: 9px;
+  letter-spacing: 1.1px;
+  text-transform: uppercase;
+  color: var(--text-faint);
+}
+
+.progress-stat-value {
+  font-size: 14px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: var(--text);
+}
+
+/* Scrolling activity log: one line per finished target. */
+.progress-log {
+  margin-top: 12px;
+  max-height: 168px;
+  overflow-y: auto;
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  line-height: 1.85;
+  color: var(--text-dim);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface-2);
+  padding: 7px 10px;
+}
+
+.progress-log:empty { display: none; }
+
+.progress-log-line {
+  display: flex;
+  gap: 7px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.progress-log-line .tick { color: var(--safe); flex: none; }
+.progress-log-line .cross { color: var(--danger); flex: none; }
+.progress-log-line .amount { margin-left: auto; color: var(--text-faint); flex: none; }
+
+/* Finished state: freeze the pulse, tint the bar green. */
+.progress-box.is-done .progress-dot {
+  animation: none;
+  background: var(--safe);
+}
+
+.progress-box.is-done .progress-fill {
+  background: linear-gradient(90deg, var(--safe), var(--safe));
+}
+/* ==========================================================================
+   Drive selector cards
+
+   One card per volume. The card shows capacity at a glance and acts as the
+   scope switch for the three panels below it (apps / large files / folders).
+   ========================================================================== */
+
+.drive-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(210px, 1fr));
+  gap: 10px;
+  margin-bottom: 14px;
+}
+
+.drive-card {
+  text-align: left;
+  font: inherit;
+  color: var(--text);
+  padding: 11px 13px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface-1);
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s, box-shadow 0.15s;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.drive-card:hover {
+  border-color: var(--border-strong);
+  background: var(--surface-2);
+}
+
+.drive-card.is-active {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+  box-shadow: inset 2px 0 0 var(--accent);
+}
+
+.drive-card-top {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.drive-card-name {
+  font-size: 14px;
+  font-weight: 800;
+  letter-spacing: 0.5px;
+}
+
+.drive-card-label {
+  font-size: 10px;
+  color: var(--text-faint);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.drive-card-pct {
+  font-size: 11.5px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-dim);
+}
+
+.drive-card.is-active .drive-card-pct { color: var(--accent); }
+
+/* Capacity bar: steel by default, amber/danger as it fills. */
+.drive-card-bar {
+  height: 5px;
+  border-radius: 2px;
+  background: var(--surface-4);
+  overflow: hidden;
+}
+
+.drive-card-bar span {
+  display: block;
+  height: 100%;
+  border-radius: 2px;
+  background: var(--steel);
+  transition: width 0.45s var(--ease);
+}
+
+.drive-card-bar.warn span { background: var(--caution); }
+.drive-card-bar.crit span { background: var(--danger); }
+
+.drive-card-meta {
+  display: flex;
+  justify-content: space-between;
+  font-size: 10px;
+  color: var(--text-faint);
+  font-variant-numeric: tabular-nums;
+}
+
+.drive-card.is-active .drive-card-name { color: var(--accent); }
+/* ==========================================================================
+   Installed-app views: icon + three layouts
+
+   The list is scanned by eye, so every row leads with the real program icon
+   (extracted from the exe by the server). Three densities are offered:
+     list     icon | name + path | size + bar        (default)
+     grid     icon-first cards, good for spotting familiar apps
+     compact  one dense line per app
+   ========================================================================== */
+
+/* View switcher: same segmented language as the tab bar. */
+.view-switch {
+  display: flex;
+  gap: 1px;
+  padding: 2px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface-1);
+}
+
+.view-switch button {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font: inherit;
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.3px;
+  color: var(--text-faint);
+  background: transparent;
+  border: 0;
+  border-radius: var(--radius-sm);
+  padding: 4px 9px;
+  cursor: pointer;
+  transition: color 0.14s, background 0.14s;
+}
+
+.view-switch button:hover:not(.active) { color: var(--text); background: var(--surface-3); }
+
+.view-switch button.active {
+  color: var(--accent-ink);
+  background: var(--accent);
+  font-weight: 700;
+}
+
+.view-switch svg { width: 12px; height: 12px; }
+
+/* App icon tile, shared by all three layouts. Falls back to a letter tile
+   when the extractor found nothing. */
+.app-icon {
+  width: 32px;
+  height: 32px;
+  border-radius: var(--radius-sm);
+  flex: none;
+  object-fit: contain;
+  background: var(--surface-3);
+  border: 1px solid var(--hairline);
+}
+
+.app-icon-letter {
+  width: 32px;
+  height: 32px;
+  border-radius: var(--radius-sm);
+  flex: none;
+  display: grid;
+  place-items: center;
+  font-size: 14px;
+  font-weight: 800;
+  color: var(--accent-ink);
+  background: linear-gradient(135deg, var(--accent), var(--accent-dim, var(--accent)));
+  border: 1px solid var(--hairline);
+  text-transform: uppercase;
+}
+
+/* ---- layout: list ---- */
+
+#apps-list.apps-list-view { display: block; }
+
+.apps-list-view .app-row {
+  display: grid;
+  grid-template-columns: 32px 1fr 130px;
+  align-items: center;
+  gap: 11px;
+  padding: 8px 13px;
+  border: 1px solid var(--border);
+  border-bottom: 0;
+  background: var(--surface-1);
+  transition: background 0.13s;
+}
+
+.apps-list-view .app-row:first-child { border-radius: var(--radius) var(--radius) 0 0; }
+.apps-list-view .app-row:last-child {
+  border-bottom: 1px solid var(--border);
+  border-radius: 0 0 var(--radius) var(--radius);
+}
+.apps-list-view .app-row:nth-child(even) { background: var(--surface-2); }
+.apps-list-view .app-row:hover { background: var(--surface-3); }
+
+.app-main { min-width: 0; }
+
+.app-name {
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.app-sub {
+  font-size: 10px;
+  color: var(--text-faint);
+  margin-top: 1px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: var(--font-mono);
+}
+
+.app-size {
+  text-align: right;
+  font-size: 13px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: var(--text);
+}
+
+.app-size small {
+  display: block;
+  font-weight: 500;
+  font-size: 9.5px;
+  color: var(--text-faint);
+  margin-top: 1px;
+}
+
+/* Proportional bar under the name, relative to the largest app on screen. */
+.app-bar {
+  height: 3px;
+  margin-top: 4px;
+  background: var(--surface-4);
+  border-radius: 2px;
+  overflow: hidden;
+}
+
+.app-bar span {
+  display: block;
+  height: 100%;
+  background: linear-gradient(90deg, var(--accent-dim, var(--accent)), var(--accent));
+  border-radius: 2px;
+}
+
+/* ---- layout: grid ---- */
+
+/* The host element (#apps-list) IS the grid container, because the JS renders
+   cards straight into it. It must win over the default `display: block`. */
+#apps-list.apps-grid-view {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(168px, 1fr));
+  gap: 9px;
+}
+
+#apps-list.apps-grid-view .app-card {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  padding: 11px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface-1);
+  transition: border-color 0.14s, background 0.14s, transform 0.14s var(--ease);
+}
+
+#apps-list.apps-grid-view .app-card:hover {
+  border-color: var(--border-strong);
+  background: var(--surface-2);
+  transform: translateY(-1px);
+}
+
+#apps-list.apps-grid-view .app-icon,
+#apps-list.apps-grid-view .app-icon-letter {
+  width: 40px;
+  height: 40px;
+  border-radius: var(--radius);
+}
+
+#apps-list.apps-grid-view .app-icon-letter { font-size: 17px; }
+
+#apps-list.apps-grid-view .app-name {
+  font-size: 12px;
+  white-space: normal;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  min-height: 2.4em;
+}
+
+#apps-list.apps-grid-view .app-size {
+  text-align: left;
+  font-size: 13.5px;
+}
+
+/* ---- layout: compact ---- */
+
+.apps-compact-view .app-line {
+  display: grid;
+  grid-template-columns: 18px 1fr auto;
+  align-items: center;
+  gap: 9px;
+  padding: 3px 10px;
+  border-bottom: 1px solid var(--hairline);
+  font-size: 11.5px;
+  transition: background 0.12s;
+}
+
+.apps-compact-view .app-line:hover { background: var(--surface-2); }
+.apps-compact-view .app-line:last-child { border-bottom: 0; }
+
+.apps-compact-view .app-icon,
+.apps-compact-view .app-icon-letter {
+  width: 18px;
+  height: 18px;
+  border-radius: 3px;
+}
+
+.apps-compact-view .app-icon-letter { font-size: 9px; }
+
+.apps-compact-view .app-name { font-size: 11.5px; }
+
+.apps-compact-view .app-size {
+  font-size: 11.5px;
+  color: var(--text-dim);
+}
+
+/* Shell around the compact list. The host keeps the border; the inner wrapper
+   only needs to exist so selectors stay predictable. */
+#apps-list.apps-compact-view {
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface-1);
+  overflow: hidden;
+}
+
+#apps-list.apps-compact-view > .apps-compact-view {
+  border: 0;
+  border-radius: 0;
+  background: transparent;
 }

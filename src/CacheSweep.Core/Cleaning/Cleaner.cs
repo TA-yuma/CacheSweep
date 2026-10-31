@@ -37,19 +37,48 @@ public sealed class Cleaner
         _log = log;
     }
 
-    public CleanResult Clean(IEnumerable<string> targetIds, CleanOptions options, CancellationToken ct = default)
+    /// <summary>
+    /// Cleans the given targets in order.
+    /// </summary>
+    /// <param name="targetIds">Ids to process; duplicates are ignored.</param>
+    /// <param name="options">Dry-run / recycle-bin / dangerous opt-in.</param>
+    /// <param name="ct">Cancellation token.</param>
+    /// <param name="onProgress">
+    /// Invoked from the calling thread after each target finishes, so a UI can
+    /// show real progress instead of an indeterminate spinner. The callback
+    /// receives the just-completed item plus 1-based counters.
+    /// </param>
+    public CleanResult Clean(
+        IEnumerable<string> targetIds,
+        CleanOptions options,
+        CancellationToken ct = default,
+        Action<CleanProgress>? onProgress = null)
     {
         var sw = Stopwatch.StartNew();
         var startedAt = DateTimeOffset.Now;
         var results = new List<CleanResultItem>();
+        var ordered = targetIds.Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+        var total = ordered.Count;
 
-        foreach (var id in targetIds.Distinct(StringComparer.OrdinalIgnoreCase))
+        for (var index = 0; index < ordered.Count; index++)
         {
             ct.ThrowIfCancellationRequested();
 
-            results.Add(_targets.TryGetValue(id, out var target)
+            var id = ordered[index];
+            var item = _targets.TryGetValue(id, out var target)
                 ? CleanOne(target, options, ct)
-                : new CleanResultItem(id, "(unknown)", string.Empty, 0, 0, false, "Unknown target id."));
+                : new CleanResultItem(id, "(unknown)", string.Empty, 0, 0, false, "Unknown target id.");
+
+            results.Add(item);
+
+            onProgress?.Invoke(new CleanProgress(
+                Index: index + 1,
+                Total: total,
+                TargetCount: total,
+                Item: item,
+                FreedBytesSoFar: results.Sum(r => r.Success ? r.FreedBytes : 0),
+                FilesSoFar: results.Sum(r => r.Success ? r.DeletedFiles : 0),
+                FailuresSoFar: results.Count(r => !r.Success)));
         }
 
         sw.Stop();

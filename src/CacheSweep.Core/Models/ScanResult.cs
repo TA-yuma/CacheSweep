@@ -50,3 +50,22 @@ public sealed record CleanResult
     public int TotalDeletedFiles => Items.Where(i => i.Success).Sum(i => i.DeletedFiles);
     public int Failures => Items.Count(i => !i.Success);
 }
+
+/// <summary>
+/// One progress tick during a clean run. Reported after each target finishes so
+/// a UI can show a determinate bar rather than an indeterminate spinner.
+/// </summary>
+public sealed record CleanProgress(
+    int Index,
+    int Total,
+    int TargetCount,
+    CleanResultItem Item,
+    long FreedBytesSoFar,
+    int FilesSoFar,
+    int FailuresSoFar)
+{
+    /// <summary>0–100, rounded down so the bar never claims completion early.</summary>
+    public int Percent => Total <= 0 ? 0 : Math.Min(100, Index * 100 / Total);
+
+    public bool IsLast => Index >= Total;
+}

@@ -24,6 +24,14 @@ const state = {
   pendingAction: null,
   rules: [],
   theme: "dark",
+  /** Drives as last reported by the server, for re-rendering the selector. */
+  drives: [],
+  /** Currently selected drive (e.g. "D:\\"), or null for "all drives". */
+  currentDrive: null,
+  /** Installed apps for the selected drive, kept so the view can re-render. */
+  apps: [],
+  /** Installed-app layout: "list" | "grid" | "compact". */
+  appView: "list",
   inventoryLoaded: { apps: false, files: false, folders: false, drives: false },
 };
 
@@ -411,21 +419,170 @@ function requestClean(dryRun) {
   );
 }
 
+/* ---------------- clean progress panel ---------------- */
+
+/** Resets the panel to its starting state and shows it. */
+function openProgress(dryRun) {
+  const box = document.querySelector("#progress-modal .progress-box");
+  box.classList.remove("is-done");
+  $("progress-title").textContent = dryRun ? "正在生成预览" : "正在清理";
+  $("progress-current-name").textContent = "准备中…";
+  $("progress-percent").textContent = "0%";
+  $("progress-count").textContent = "0 / 0";
+  $("progress-freed").textContent = "0 B";
+  $("progress-files").textContent = "0";
+  $("progress-failures").textContent = "0";
+  $("progress-log").innerHTML = "";
+  $("progress-fill").style.width = "0%";
+  $("progress-track").setAttribute("aria-valuenow", "0");
+  $("progress-close").hidden = true;
+  $("progress-modal").hidden = false;
+}
+
+function closeProgress() {
+  $("progress-modal").hidden = true;
+}
+
+/** Applies one progress event to the panel. */
+function updateProgress(evt) {
+  const percent = Math.max(0, Math.min(100, Number(evt.percent) || 0));
+
+  $("progress-fill").style.width = `${percent}%`;
+  $("progress-track").setAttribute("aria-valuenow", String(percent));
+  $("progress-percent").textContent = `${percent}%`;
+  $("progress-count").textContent = `${evt.index || 0} / ${evt.total || 0}`;
+  $("progress-freed").textContent = formatBytes(evt.freedBytes || 0);
+  $("progress-files").textContent = (evt.deletedFiles || 0).toLocaleString("zh-CN");
+  $("progress-failures").textContent = String(evt.failures || 0);
+
+  if (evt.currentName) {
+    $("progress-current-name").textContent = evt.currentName;
+  }
+
+  // Append one line per finished target so the user sees concrete activity.
+  if (evt.currentName) {
+    const line = document.createElement("div");
+    line.className = "progress-log-line";
+
+    const mark = document.createElement("span");
+    mark.className = evt.currentSuccess ? "tick" : "cross";
+    mark.textContent = evt.currentSuccess ? "✓" : "✗";
+
+    const name = document.createElement("span");
+    name.textContent = evt.currentName;
+
+    const amount = document.createElement("span");
+    amount.className = "amount";
+    amount.textContent = evt.currentSuccess
+      ? formatBytes(evt.currentBytes || 0)
+      : evt.currentError || "失败";
+
+    line.append(mark, name, amount);
+    const log = $("progress-log");
+    log.appendChild(line);
+    log.scrollTop = log.scrollHeight;
+  }
+}
+
+/** Called once the run finished: freezes the bar and offers a close button. */
+function finishProgress(evt, dryRun) {
+  const box = document.querySelector("#progress-modal .progress-box");
+  box.classList.add("is-done");
+
+  $("progress-fill").style.width = "100%";
+  $("progress-track").setAttribute("aria-valuenow", "100");
+  $("progress-percent").textContent = "100%";
+  $("progress-title").textContent = dryRun ? "预览完成" : "清理完成";
+
+  const secs = ((evt.durationMs || 0) / 1000).toFixed(2);
+  $("progress-current-name").textContent = dryRun
+    ? `可释放 ${formatBytes(evt.freedBytes || 0)}，用时 ${secs}s`
+    : `已释放 ${formatBytes(evt.freedBytes || 0)}，用时 ${secs}s`;
+
+  $("progress-close").hidden = false;
+  $("progress-close").focus();
+}
+
+/**
+ * Posts to the streaming clean endpoint and drives the progress panel.
+ * Returns the final result payload (same shape as /api/clean).
+ */
+async function cleanWithProgress(ids, dryRun) {
+  const res = await fetch("/api/clean/stream", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      targetIds: ids,
+      dryRun,
+      useRecycleBin: $("use-recycle").checked,
+      allowDangerous: true, // the confirm modal already demanded explicit consent
+    }),
+  });
+
+  if (!res.ok) {
+    const text = await res.text();
+    let message = `HTTP ${res.status}`;
+    try {
+      message = JSON.parse(text)?.error || message;
+    } catch {
+      message = text || message;
+    }
+    throw new Error(message);
+  }
+
+  const reader = res.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = "";
+  let final = null;
+
+  // Parse the SSE stream: events are separated by a blank line, payload on
+  // `data:` lines.
+  for (;;) {
+    const { value, done } = await reader.read();
+    if (done) break;
+
+    buffer += decoder.decode(value, { stream: true });
+
+    let sep;
+    while ((sep = buffer.indexOf("\n\n")) >= 0) {
+      const chunk = buffer.slice(0, sep);
+      buffer = buffer.slice(sep + 2);
+
+      for (const line of chunk.split("\n")) {
+        if (!line.startsWith("data:")) continue;
+
+        let evt;
+        try {
+          evt = JSON.parse(line.slice(5).trim());
+        } catch {
+          continue;
+        }
+
+        if (evt.kind === "done") {
+          final = evt;
+          finishProgress(evt, dryRun);
+        } else {
+          updateProgress(evt);
+        }
+      }
+    }
+  }
+
+  if (!final) {
+    throw new Error("清理过程意外中断");
+  }
+
+  return final.result;
+}
+
 async function runClean(ids, dryRun) {
   state.busy = true;
   updateButtons();
   setStatus(dryRun ? "生成预览中…" : "清理中…", true);
+  openProgress(dryRun);
 
   try {
-    const result = await api("/api/clean", {
-      method: "POST",
-      body: JSON.stringify({
-        targetIds: ids,
-        dryRun,
-        useRecycleBin: $("use-recycle").checked,
-        allowDangerous: true, // the modal already demanded explicit confirmation
-      }),
-    });
+    const result = await cleanWithProgress(ids, dryRun);
 
     const failed = result.items.filter((i) => !i.success);
     const lines = result.items
@@ -448,12 +605,15 @@ async function runClean(ids, dryRun) {
     );
 
     if (!dryRun) {
+      // Rescan in the background so the freed space shows up right away; the
+      // progress panel stays up until the user dismisses it.
       state.busy = false;
-      await scan();
+      scan().catch(() => {});
       return;
     }
     setStatus("预览完成");
   } catch (err) {
+    closeProgress();
     showBanner("error", `清理失败：${err.message}`);
     setStatus("清理失败");
   } finally {
@@ -464,35 +624,112 @@ async function runClean(ids, dryRun) {
 
 /* ---------------- disk usage ---------------- */
 
+/**
+ * Renders one selectable card per volume. Clicking a card scopes the three
+ * panels below (installed apps, large files, folder usage) to that drive, so
+ * every disk can be inspected on its own.
+ */
 function renderDrives(drives) {
   const wrap = $("drives");
   wrap.innerHTML = "";
+
   for (const d of drives) {
     const pct = d.totalBytes ? (d.usedBytes / d.totalBytes) * 100 : 0;
     const level = pct >= 92 ? "crit" : pct >= 80 ? "warn" : "";
-    const el = document.createElement("div");
-    el.className = "drive";
-    el.innerHTML = `
-      <div class="drive-top">
-        <span>${d.name} ${d.label ? `· ${d.label}` : ""}</span>
-        <span>${formatBytes(d.freeBytes)} 可用</span>
+    const active = state.currentDrive === d.name;
+
+    const card = document.createElement("button");
+    card.type = "button";
+    card.className = `drive-card${active ? " is-active" : ""}`;
+    card.setAttribute("aria-pressed", String(active));
+    card.innerHTML = `
+      <div class="drive-card-top">
+        <span class="drive-card-name">${escapeHtml(d.name)}</span>
+        <span class="drive-card-pct">${pct.toFixed(0)}%</span>
       </div>
-      <div class="drive-bar ${level}"><span style="width:${pct.toFixed(1)}%"></span></div>
-      <div class="drive-top" style="margin-top:5px;font-size:11px;color:var(--text-faint)">
-        <span>已用 ${formatBytes(d.usedBytes)}</span><span>共 ${formatBytes(d.totalBytes)}</span>
+      <div class="drive-card-label">${escapeHtml(d.label || d.format || "本地磁盘")}</div>
+      <div class="drive-card-bar ${level}"><span style="width:${pct.toFixed(1)}%"></span></div>
+      <div class="drive-card-meta">
+        <span>已用 ${formatBytes(d.usedBytes)}</span>
+        <span>共 ${formatBytes(d.totalBytes)}</span>
+      </div>
+      <div class="drive-card-meta">
+        <span>可用 ${formatBytes(d.freeBytes)}</span>
       </div>`;
-    wrap.appendChild(el);
+
+    card.addEventListener("click", () => selectDrive(d.name));
+    wrap.appendChild(card);
   }
+
+  // "All drives" reset card, only useful when more than one volume exists.
+  if (drives.length > 1) {
+    const all = document.createElement("button");
+    all.type = "button";
+    all.className = `drive-card${state.currentDrive === null ? " is-active" : ""}`;
+    all.setAttribute("aria-pressed", String(state.currentDrive === null));
+    all.innerHTML = `
+      <div class="drive-card-top">
+        <span class="drive-card-name">全部</span>
+      </div>
+      <div class="drive-card-label">不限磁盘</div>
+      <div class="drive-card-bar"><span style="width:0%"></span></div>
+      <div class="drive-card-meta">
+        <span>${drives.length} 个磁盘</span>
+      </div>`;
+    all.addEventListener("click", () => selectDrive(null));
+    wrap.appendChild(all);
+  }
+}
+
+/** Switches the analysis scope and reloads whatever has already been shown. */
+function selectDrive(drive) {
+  state.currentDrive = drive;
+  state.inventoryLoaded.apps = false;
+  state.inventoryLoaded.files = false;
+  state.inventoryLoaded.folders = false;
+
+  const label = drive ? `${drive}` : "全部磁盘";
+  $("apps-drive-label").textContent = label;
+  $("files-drive-label").textContent = label;
+  $("folders-drive-label").textContent = label;
+
+  renderDrives(state.drives);
+
+  // Reset the panel numbers so stale figures from another drive are not shown.
+  $("apps-total").textContent = "—";
+  $("files-total").textContent = "—";
+  $("folders-total").textContent = "—";
+  $("apps-note").textContent = "—";
+  $("files-note").textContent = "—";
+  $("folders-note").textContent = "—";
+  $("apps-list").innerHTML = "";
+  $("files-list").innerHTML = "";
+  $("folders-list").innerHTML = "";
+
+  loadApps(true);
+  loadLargeFiles();
+  loadFolders();
 }
 
 async function loadDrives() {
   try {
     const drives = await api("/api/inventory/drives");
-    renderDrives(drives);
+    state.drives = drives;
     state.inventoryLoaded.drives = true;
+
+    // Default to the first fixed volume so the panels are populated on entry.
+    const initial = state.currentDrive ?? (drives.length > 0 ? drives[0].name : null);
+    selectDrive(initial);
   } catch (err) {
     showBanner("error", `读取磁盘信息失败：${err.message}`);
   }
+}
+
+/** Re-reads volumes (a USB stick may have been plugged in). */
+async function refreshDrives() {
+  state.inventoryLoaded.drives = false;
+  state.currentDrive = null;
+  await loadDrives();
 }
 
 function renderInventoryRows(container, rows) {
@@ -536,19 +773,14 @@ async function loadApps(force = false) {
   $("apps-list").innerHTML = "";
 
   try {
-    const data = await api("/api/inventory/apps");
+    const drive = state.currentDrive;
+    const qs = drive ? `?drive=${encodeURIComponent(drive)}` : "";
+    const data = await api(`/api/inventory/apps${qs}`);
     $("apps-total").textContent = formatBytes(data.totalBytes);
     $("apps-note").textContent = `${data.count} 个程序，用时 ${(data.durationMs / 1000).toFixed(1)}s`;
 
-    renderInventoryRows(
-      $("apps-list"),
-      data.apps.map((a) => ({
-        title: a.name,
-        sub: a.installLocation + (a.locationMissing ? "  (目录已不存在)" : ""),
-        bytes: a.bytes,
-        detail: `${a.fileCount.toLocaleString("zh-CN")} 文件${a.publisher ? ` · ${a.publisher}` : ""}`,
-      }))
-    );
+    state.apps = data.apps;
+    renderApps();
     state.inventoryLoaded.apps = true;
     setStatus("就绪");
   } catch (err) {
@@ -559,17 +791,142 @@ async function loadApps(force = false) {
   }
 }
 
+/** Builds the icon element: real icon when the server found one, else a tile. */
+function appIconEl(app, className) {
+  if (app.iconPng) {
+    const img = document.createElement("img");
+    img.className = className || "app-icon";
+    img.src = `data:image/png;base64,${app.iconPng}`;
+    img.alt = "";
+    img.loading = "lazy";
+    return img;
+  }
+
+  // Letter tile keeps the row aligned when no icon could be extracted.
+  const tile = document.createElement("div");
+  tile.className = "app-icon-letter";
+  tile.textContent = (app.name || "?").trim().charAt(0);
+  return tile;
+}
+
+/**
+ * Renders the installed-app list in the current view mode.
+ * Layouts share the same data; only density and emphasis change.
+ */
+function renderApps() {
+  const host = $("apps-list");
+  const apps = state.apps || [];
+
+  host.className = `apps-${state.appView}-view`;
+  host.innerHTML = "";
+
+  if (apps.length === 0) {
+    host.className = "";
+    host.innerHTML = '<div class="empty" style="padding:32px"><p>没有数据</p></div>';
+    return;
+  }
+
+  const maxBytes = Math.max(...apps.map((a) => a.bytes), 1);
+
+  if (state.appView === "grid") {
+    // The host already carries .apps-grid-view, so cards go straight into it.
+    const grid = host;
+    for (const app of apps) {
+      const card = document.createElement("div");
+      card.className = "app-card";
+
+      const name = document.createElement("div");
+      name.className = "app-name";
+      name.textContent = app.name;
+      name.title = app.installLocation;
+
+      const size = document.createElement("div");
+      size.className = "app-size";
+      size.textContent = formatBytes(app.bytes);
+
+      card.append(appIconEl(app), name, size);
+      grid.appendChild(card);
+    }
+    return;
+  }
+
+  if (state.appView === "compact") {
+    const wrap = host;
+    for (const app of apps) {
+      const line = document.createElement("div");
+      line.className = "app-line";
+      line.title = app.installLocation;
+
+      const name = document.createElement("div");
+      name.className = "app-name";
+      name.textContent = app.name;
+
+      const size = document.createElement("div");
+      size.className = "app-size";
+      size.textContent = formatBytes(app.bytes);
+
+      line.append(appIconEl(app), name, size);
+      wrap.appendChild(line);
+    }
+    return;
+  }
+
+  // Default: list rows with a proportional bar.
+  const wrap = host;
+
+  for (const app of apps) {
+    const row = document.createElement("div");
+    row.className = "app-row";
+
+    const main = document.createElement("div");
+    main.className = "app-main";
+
+    const name = document.createElement("div");
+    name.className = "app-name";
+    name.textContent = app.name;
+
+    const sub = document.createElement("div");
+    sub.className = "app-sub";
+    sub.textContent = app.installLocation + (app.locationMissing ? "  (目录已不存在)" : "");
+    sub.title = app.installLocation;
+
+    const bar = document.createElement("div");
+    bar.className = "app-bar";
+    const fill = document.createElement("span");
+    fill.style.width = `${((app.bytes / maxBytes) * 100).toFixed(1)}%`;
+    bar.appendChild(fill);
+
+    main.append(name, sub, bar);
+
+    const size = document.createElement("div");
+    size.className = "app-size";
+    size.textContent = formatBytes(app.bytes);
+    const files = document.createElement("small");
+    files.textContent = `${(app.fileCount || 0).toLocaleString("zh-CN")} 文件`;
+    size.appendChild(files);
+
+    row.append(appIconEl(app), main, size);
+    wrap.appendChild(row);
+  }
+}
+
 async function loadLargeFiles() {
   if (state.busy) return;
   state.busy = true;
   setStatus("正在查找大文件…", true);
-  $("files-note").textContent = "扫描 C 盘中…";
+
+  // Large files only make sense per volume; fall back to the first drive when
+  // "all drives" is selected.
+  const drive = state.currentDrive || (state.drives[0]?.name ?? "C:\\");
+  $("files-note").textContent = `扫描 ${drive} 中…`;
   $("files-list").innerHTML = "";
 
   const minMb = Number($("file-min").value) || 100;
 
   try {
-    const data = await api(`/api/inventory/large-files?root=C%3A%5C&minMb=${minMb}&take=50`);
+    const data = await api(
+      `/api/inventory/large-files?root=${encodeURIComponent(drive)}&minMb=${minMb}&take=50`
+    );
     $("files-total").textContent = formatBytes(data.totalBytes);
     $("files-note").textContent = `找到 ${data.count} 个 ≥${minMb}MB 的文件`;
 
@@ -596,11 +953,13 @@ async function loadFolders() {
   if (state.busy) return;
   state.busy = true;
   setStatus("正在统计目录体积…", true);
-  $("folders-note").textContent = "统计中…";
+
+  const drive = state.currentDrive || (state.drives[0]?.name ?? "C:\\");
+  $("folders-note").textContent = `统计 ${drive} 中…`;
   $("folders-list").innerHTML = "";
 
   try {
-    const data = await api("/api/inventory/folders?drive=C%3A%5C");
+    const data = await api(`/api/inventory/folders?drive=${encodeURIComponent(drive)}`);
     const total = data.folders.reduce((s, f) => s + f.bytes, 0);
     $("folders-total").textContent = formatBytes(total);
     $("folders-note").textContent = `${data.folders.length} 个目录`;
@@ -815,6 +1174,15 @@ document.querySelectorAll("#theme-switch button").forEach((b) => {
 $("theme-select").addEventListener("change", (e) => applyTheme(e.target.value));
 
 $("modal-cancel").addEventListener("click", closeModal);
+
+// The progress panel stays up after the run so the user can read the summary;
+// this dismisses it. Escape does the same, but only once the run has finished.
+$("progress-close").addEventListener("click", closeProgress);
+document.addEventListener("keydown", (e) => {
+  if (e.key === "Escape" && !$("progress-modal").hidden && !$("progress-close").hidden) {
+    closeProgress();
+  }
+});
 $("modal-ok").addEventListener("click", () => {
   const action = state.pendingAction;
   if (action) action();
@@ -854,6 +1222,18 @@ $("btn-clear").addEventListener("click", () => {
 $("btn-load-apps").addEventListener("click", () => loadApps(true));
 $("btn-load-files").addEventListener("click", loadLargeFiles);
 $("btn-load-folders").addEventListener("click", loadFolders);
+$("btn-refresh-drives").addEventListener("click", refreshDrives);
+
+// Installed-app layouts. The choice is remembered for the session.
+document.querySelectorAll("#apps-view-switch button").forEach((b) => {
+  b.addEventListener("click", () => {
+    state.appView = b.dataset.view;
+    document.querySelectorAll("#apps-view-switch button").forEach((x) => {
+      x.classList.toggle("active", x === b);
+    });
+    renderApps();
+  });
+});
 
 $("btn-white-all").addEventListener("click", () => moveAllRules(true));
 $("btn-black-caution").addEventListener("click", () =>
@@ -871,6 +1251,22 @@ $("btn-show-audit").addEventListener("click", showAudit);
 (function boot() {
   const stored = document.documentElement.getAttribute("data-theme") || "dark";
   applyTheme(stored, false);
+
+  /* The header is pinned; the sticky toolbar below it needs to know its height.
+     Measured rather than hard-coded so a wrapped header (narrow window, long
+     machine name) still lines up. */
+  const topbar = document.querySelector(".topbar");
+  if (topbar) {
+    const syncHeaderHeight = () => {
+      const h = Math.round(topbar.getBoundingClientRect().height);
+      document.documentElement.style.setProperty("--topbar-h", `${h}px`);
+    };
+    syncHeaderHeight();
+    if (typeof ResizeObserver !== "undefined") {
+      new ResizeObserver(syncHeaderHeight).observe(topbar);
+    }
+    window.addEventListener("resize", syncHeaderHeight);
+  }
 
   // The server is the source of truth: another surface (desktop shell, a second
   // tab, or a restored profile) may have changed the theme. Reconcile on boot

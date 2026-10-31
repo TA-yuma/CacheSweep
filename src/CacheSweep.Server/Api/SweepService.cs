@@ -101,7 +101,10 @@ public sealed class SweepService
         return report;
     }
 
-    public CleanResult Clean(CleanRequest request, CancellationToken ct)
+    public CleanResult Clean(
+        CleanRequest request,
+        CancellationToken ct,
+        Action<CleanProgress>? onProgress = null)
     {
         var options = new CleanOptions
         {
@@ -110,7 +113,7 @@ public sealed class SweepService
             AllowDangerous = request.AllowDangerous,
         };
 
-        var result = new Cleaner(Targets, Log).Clean(request.TargetIds, options, ct);
+        var result = new Cleaner(Targets, Log).Clean(request.TargetIds, options, ct, onProgress);
         Log($"clean (dryRun={request.DryRun}): ids={string.Join(',', request.TargetIds)} "
             + $"freed={result.TotalFreedBytes} failures={result.Failures}");
 

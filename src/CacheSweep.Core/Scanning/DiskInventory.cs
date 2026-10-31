@@ -11,7 +11,14 @@ public sealed record InstalledApp(
     string InstallLocation,
     long Bytes,
     int FileCount,
-    bool LocationMissing);
+    bool LocationMissing)
+{
+    /// <summary>
+    /// 32×32 PNG of the app's icon, base64-encoded for embedding in JSON.
+    /// Null when no icon could be extracted (the UI then draws a letter tile).
+    /// </summary>
+    public string? IconPng { get; init; }
+}
 
 /// <summary>A large file found during a disk walk.</summary>
 public sealed record LargeFile(
@@ -105,6 +112,14 @@ public sealed class DiskInventory
                     }
 
                     var (bytes, files, missing) = MeasureLocation(location, ct);
+
+                    // Real program icons make the usage list scannable; the
+                    // extractor caches per install location and is cheap when
+                    // the entry already has a DisplayIcon.
+                    var icon = OperatingSystem.IsWindows()
+                        ? AppIconExtractor.Extract(location, sub.GetValue("DisplayIcon") as string)
+                        : null;
+
                     apps[location] = new InstalledApp(
                         name.Trim(),
                         sub.GetValue("Publisher") as string,
@@ -112,7 +127,10 @@ public sealed class DiskInventory
                         location,
                         bytes,
                         files,
-                        missing);
+                        missing)
+                    {
+                        IconPng = icon,
+                    };
                 }
             }
             catch (Exception ex) when (ex is System.Security.SecurityException or UnauthorizedAccessException or IOException)

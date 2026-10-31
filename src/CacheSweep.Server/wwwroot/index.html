@@ -120,38 +120,64 @@
 
     <!-- ============ view: disk usage ============ -->
     <section class="view" id="view-disk" hidden>
+      <!-- One card per physical drive. Clicking a card scopes the three panels
+           below to that volume, so every disk can be inspected on its own. -->
       <div class="inv-head">
-        <h2>占用分析</h2>
-        <span class="muted" id="disk-head-note">统计已安装程序、大文件与目录体积</span>
+        <h2>磁盘</h2>
+        <span class="muted">点击选择要分析的磁盘</span>
         <span class="spacer"></span>
-        <div id="drives" style="display:flex;gap:10px;flex-wrap:wrap"></div>
+        <button id="btn-refresh-drives" class="btn ghost sm">刷新</button>
       </div>
+      <div class="drive-cards" id="drives"></div>
 
       <div class="summary" style="grid-template-columns:repeat(3,1fr)">
         <div class="stat stat-total">
-          <span class="stat-label">已安装程序占用</span>
+          <span class="stat-label" id="apps-scope">已安装程序占用</span>
           <div class="stat-value" id="apps-total">—</div>
         </div>
         <div class="stat stat-caution">
-          <span class="stat-label">大文件合计 (≥100MB)</span>
+          <span class="stat-label" id="files-scope">大文件合计 (≥100MB)</span>
           <div class="stat-value" id="files-total">—</div>
         </div>
         <div class="stat stat-safe">
-          <span class="stat-label">目录统计</span>
+          <span class="stat-label" id="folders-scope">目录统计</span>
           <div class="stat-value" id="folders-total">—</div>
         </div>
       </div>
 
       <div class="inv-head">
-        <h2>已安装程序</h2>
+        <h2><span id="apps-drive-label">全部磁盘</span> · 已安装程序</h2>
         <span class="muted" id="apps-note">—</span>
         <span class="spacer"></span>
-        <button id="btn-load-apps" class="btn ghost sm">重新统计</button>
+        <div class="view-switch" id="apps-view-switch" role="group" aria-label="查看方式">
+          <button type="button" data-view="list" class="active" title="列表：图标 + 名称 + 路径 + 体积条">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
+              <path d="M4 6h16M4 12h16M4 18h16" />
+            </svg>
+            <span>列表</span>
+          </button>
+          <button type="button" data-view="grid" title="卡片：网格平铺，适合快速浏览图标">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
+              <rect x="3.5" y="3.5" width="7" height="7" rx="1.5" />
+              <rect x="13.5" y="3.5" width="7" height="7" rx="1.5" />
+              <rect x="3.5" y="13.5" width="7" height="7" rx="1.5" />
+              <rect x="13.5" y="13.5" width="7" height="7" rx="1.5" />
+            </svg>
+            <span>卡片</span>
+          </button>
+          <button type="button" data-view="compact" title="紧凑：一行一个，信息最密">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
+              <path d="M4 5h16M4 9h16M4 13h16M4 17h16M4 21h16" />
+            </svg>
+            <span>紧凑</span>
+          </button>
+        </div>
+        <button id="btn-load-apps" class="btn ghost sm">统计</button>
       </div>
       <div id="apps-list"></div>
 
       <div class="inv-head" style="margin-top:18px">
-        <h2>最大的文件</h2>
+        <h2><span id="files-drive-label">全部磁盘</span> · 最大的文件</h2>
         <span class="muted" id="files-note">—</span>
         <span class="spacer"></span>
         <label class="chk"><span>最小</span>
@@ -161,15 +187,15 @@
             <option value="1024">1 GB</option>
           </select>
         </span></label>
-        <button id="btn-load-files" class="btn ghost sm">扫描大文件</button>
+        <button id="btn-load-files" class="btn ghost sm">扫描</button>
       </div>
       <div id="files-list"></div>
 
       <div class="inv-head" style="margin-top:18px">
-        <h2>C 盘目录占用</h2>
+        <h2><span id="folders-drive-label">全部磁盘</span> · 目录占用</h2>
         <span class="muted" id="folders-note">—</span>
         <span class="spacer"></span>
-        <button id="btn-load-folders" class="btn ghost sm">统计目录</button>
+        <button id="btn-load-folders" class="btn ghost sm">统计</button>
       </div>
       <div id="folders-list"></div>
     </section>
@@ -305,6 +331,50 @@
       <div class="modal-actions">
         <button id="modal-cancel" class="btn ghost">取消</button>
         <button id="modal-ok" class="btn danger">确认执行</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Live clean progress. Deterministic bar driven by server-sent events, so
+       the user can always tell work is happening and how far along it is. -->
+  <div class="modal" id="progress-modal" hidden>
+    <div class="modal-box progress-box" role="dialog" aria-modal="true" aria-labelledby="progress-title">
+      <h2 id="progress-title">正在清理</h2>
+
+      <div class="progress-current">
+        <span class="progress-dot" id="progress-dot"></span>
+        <span id="progress-current-name">准备中…</span>
+      </div>
+
+      <div class="progress-track" role="progressbar" aria-valuemin="0" aria-valuemax="100"
+           aria-valuenow="0" id="progress-track">
+        <div class="progress-fill" id="progress-fill" style="width:0%"></div>
+      </div>
+
+      <div class="progress-meta">
+        <span id="progress-percent">0%</span>
+        <span id="progress-count">0 / 0</span>
+      </div>
+
+      <div class="progress-stats">
+        <div class="progress-stat">
+          <span class="progress-stat-label">已释放</span>
+          <span class="progress-stat-value" id="progress-freed">0 B</span>
+        </div>
+        <div class="progress-stat">
+          <span class="progress-stat-label">已处理文件</span>
+          <span class="progress-stat-value" id="progress-files">0</span>
+        </div>
+        <div class="progress-stat">
+          <span class="progress-stat-label">失败</span>
+          <span class="progress-stat-value" id="progress-failures">0</span>
+        </div>
+      </div>
+
+      <div class="progress-log" id="progress-log"></div>
+
+      <div class="modal-actions">
+        <button id="progress-close" class="btn primary" hidden>完成</button>
       </div>
     </div>
   </div>
