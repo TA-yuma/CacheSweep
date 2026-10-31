@@ -4,7 +4,7 @@
 ; 自动创建开始菜单和桌面快捷方式，可选开机自启（由应用内设置控制）。
 
 #define MyAppName "CacheSweep"
-#define MyAppVersion "1.0.1"
+#define MyAppVersion "1.0.2"
 #define MyAppPublisher "君臨天下"
 #define MyAppExeName "CacheSweep.exe"
 #define MyAppAssocName MyAppName + " 设置"
