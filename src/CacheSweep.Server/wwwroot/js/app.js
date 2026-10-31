@@ -5,17 +5,15 @@
  * The server accepts rule ids, never paths, so a compromised page can only act
  * on targets that already exist in the rule set. */
 
-const CATEGORY_LABEL = {
-  TempFiles: "临时文件",
-  BrowserCache: "浏览器缓存",
-  AppCache: "应用缓存",
-  SystemCache: "系统缓存",
-  DeveloperCache: "开发者缓存",
-  CrashAndDiagnostics: "崩溃与诊断",
-  RecycleBin: "回收站",
-};
+/* Category and risk labels resolve through the active language, so they must
+   be functions rather than a table evaluated once at load time. */
+function categoryLabel(cat) {
+  return t(`category.${cat}`) || cat;
+}
 
-const RISK_LABEL = { Safe: "安全", Caution: "需确认", Dangerous: "高风险" };
+function riskLabel(risk) {
+  return t(`risk.${risk}`) || risk;
+}
 
 const state = {
   scan: null,
@@ -227,7 +225,7 @@ function renderList() {
 
   if (items.length === 0) {
     list.innerHTML =
-      '<div class="empty"><p>没有发现可清理的缓存目录</p><p class="hint">这是好事，说明没有已知缓存被占用</p></div>';
+      `<div class="empty"><p>${t("sweep.noCacheTitle")}</p><p class="hint">${t("sweep.noCacheHint")}</p></div>`;
     return;
   }
 
@@ -265,24 +263,24 @@ function renderList() {
 
     const riskBadge = document.createElement("span");
     riskBadge.className = `badge ${item.risk}`;
-    riskBadge.textContent = RISK_LABEL[item.risk] || item.risk;
+    riskBadge.textContent = riskLabel(item.risk);
     title.appendChild(riskBadge);
 
     const catBadge = document.createElement("span");
     catBadge.className = "badge cat";
-    catBadge.textContent = CATEGORY_LABEL[item.category] || item.category;
+    catBadge.textContent = categoryLabel(item.category);
     title.appendChild(catBadge);
 
     if (item.status === "in-use") {
       const st = document.createElement("span");
       st.className = "badge status-in-use";
-      st.textContent = "正在使用";
-      st.title = "相关程序正在运行，清理前请先关闭";
+      st.textContent = t("status.inUse");
+      st.title = t("status.inUseHint");
       title.appendChild(st);
     } else if (item.status === "blocked") {
       const st = document.createElement("span");
       st.className = "badge status-blocked";
-      st.textContent = "已阻止";
+      st.textContent = t("status.blocked");
       title.appendChild(st);
     }
 
@@ -304,7 +302,7 @@ function renderList() {
     bytes.textContent = formatBytes(item.bytes);
     const files = document.createElement("div");
     files.className = "files";
-    files.textContent = `${item.fileCount.toLocaleString("zh-CN")} 个文件`;
+    files.textContent = `${item.fileCount.toLocaleString("zh-CN")} ${t("unit.files")}`;
     size.append(bytes, files);
 
     if (selectable) {
@@ -328,7 +326,9 @@ function updateButtons() {
   $("btn-select-safe").disabled = !state.scan || state.busy;
   $("btn-clear").disabled = n === 0 || state.busy;
   $("btn-scan").disabled = state.busy;
-  $("btn-clean").textContent = n === 0 ? "执行清理" : `执行清理 (${n})`;
+
+  const clean = t("action.clean");
+  $("btn-clean").textContent = n === 0 ? clean : `${clean} (${n})`;
 }
 
 /* ---------------- sweep: actions ---------------- */
@@ -343,7 +343,7 @@ async function scan() {
   $("empty").hidden = true;
   $("list").innerHTML = "";
   $("scanbar").hidden = false;
-  setStatus("正在扫描目录体积…", true);
+  setStatus(t("status.scanning"), true);
 
   try {
     const data = await api("/api/scan", { method: "POST" });
@@ -358,18 +358,18 @@ async function scan() {
     showBanner(
       data.totals.bytes > 0 ? "info" : "ok",
       data.totals.bytes > 0
-        ? `扫描完成：<strong>${active.length}</strong> 个有内容的缓存目录，合计 <strong>${formatBytes(
+        ? `${t("scan.doneActive")}<strong>${active.length}</strong>${t("scan.doneActive2")}<strong>${formatBytes(
             data.totals.bytes
-          )}</strong>，用时 ${(data.scanDurationMs / 1000).toFixed(2)}s。` +
-            (inUse ? ` 其中 ${inUse} 项因程序正在运行而不可清理。` : "") +
-            (ignored ? ` ${ignored} 项在你的黑名单中已跳过。` : "") +
-            ` 勾选后先「预览清理」，再执行。`
-        : "扫描完成：未发现可清理的缓存。"
+          )}</strong>${t("scan.doneActive3")}${(data.scanDurationMs / 1000).toFixed(2)}${t("unit.s")}。` +
+            (inUse ? ` ${t("scan.inUse")}${inUse}${t("scan.inUse2")}` : "") +
+            (ignored ? ` ${ignored} ${t("scan.ignored")}` : "") +
+            ` ${t("scan.hint")}`
+        : t("scan.empty")
     );
-    setStatus("就绪");
+    setStatus(t("status.ready"));
   } catch (err) {
-    showBanner("error", `扫描失败：${err.message}`);
-    setStatus("扫描失败");
+    showBanner("error", `${t("scan.failed")}${err.message}`);
+    setStatus(t("status.scanFailed"));
   } finally {
     state.busy = false;
     $("scanbar").hidden = true;
@@ -391,31 +391,31 @@ function requestClean(dryRun) {
     .map((i) => `<li>${i.name} — <strong>${formatBytes(i.bytes)}</strong></li>`)
     .join("");
 
-  const more = chosen.length > 14 ? `<li class="muted">…及其他 ${chosen.length - 14} 项</li>` : "";
+  const more = chosen.length > 14 ? `<li class="muted">…${t("modal.andOthers")} ${chosen.length - 14} ${t("unit.items")}</li>` : "";
 
   const body = `
-    <p>将处理 <strong>${chosen.length}</strong> 个目标，预计释放 <strong>${formatBytes(reclaim)}</strong>。</p>
+    <p>${t("modal.willProcess")} <strong>${chosen.length}</strong> ${t("modal.targets")}，${t("modal.estimate")} <strong>${formatBytes(reclaim)}</strong>。</p>
     <ul>${items}${more}</ul>
     ${
       dangerous.length
-        ? `<p style="color:var(--danger)">⚠ 包含高风险项：${dangerous
+        ? `<p style="color:var(--danger)">⚠ ${t("modal.containsDangerous")}：${dangerous
             .map((d) => d.name)
-            .join("、")}。请确认其中没有你还需要的数据。</p>`
+            .join("、")}。${t("modal.dangerousConfirm")}</p>`
         : ""
     }
-    <p class="muted">${recycle ? "✓ 文件将移入回收站，可以恢复。" : "⚠ 文件将被永久删除，无法恢复！"}</p>
-    <p class="muted">${dryRun ? "本次为预览：只统计，不删除任何文件。" : "本次为实际操作：将立即删除。"}</p>
+    <p class="muted">${recycle ? t("modal.willRecycle") : t("modal.willDelete")}</p>
+    <p class="muted">${dryRun ? t("modal.previewNote") : t("modal.realNote")}</p>
   `;
 
   $("modal-ok").className = dryRun ? "btn primary" : "btn danger";
   openModal(
-    dryRun ? "预览清理" : "确认执行清理",
+    dryRun ? t("modal.previewTitle") : t("modal.confirmTitle"),
     body,
     async () => {
       closeModal();
       await runClean(ids, dryRun);
     },
-    dryRun ? "生成预览" : "确认执行"
+    dryRun ? t("modal.generatePreview") : t("action.confirm")
   );
 }
 
@@ -425,8 +425,8 @@ function requestClean(dryRun) {
 function openProgress(dryRun) {
   const box = document.querySelector("#progress-modal .progress-box");
   box.classList.remove("is-done");
-  $("progress-title").textContent = dryRun ? "正在生成预览" : "正在清理";
-  $("progress-current-name").textContent = "准备中…";
+  $("progress-title").textContent = dryRun ? t("progress.title.preview") : t("progress.title.clean");
+  $("progress-current-name").textContent = t("progress.preparing");
   $("progress-percent").textContent = "0%";
   $("progress-count").textContent = "0 / 0";
   $("progress-freed").textContent = "0 B";
@@ -475,7 +475,7 @@ function updateProgress(evt) {
     amount.className = "amount";
     amount.textContent = evt.currentSuccess
       ? formatBytes(evt.currentBytes || 0)
-      : evt.currentError || "失败";
+      : evt.currentError || t("status.failed");
 
     line.append(mark, name, amount);
     const log = $("progress-log");
@@ -492,12 +492,12 @@ function finishProgress(evt, dryRun) {
   $("progress-fill").style.width = "100%";
   $("progress-track").setAttribute("aria-valuenow", "100");
   $("progress-percent").textContent = "100%";
-  $("progress-title").textContent = dryRun ? "预览完成" : "清理完成";
+  $("progress-title").textContent = dryRun ? t("progress.title.previewDone") : t("progress.title.done");
 
   const secs = ((evt.durationMs || 0) / 1000).toFixed(2);
   $("progress-current-name").textContent = dryRun
-    ? `可释放 ${formatBytes(evt.freedBytes || 0)}，用时 ${secs}s`
-    : `已释放 ${formatBytes(evt.freedBytes || 0)}，用时 ${secs}s`;
+    ? `${t("progress.reclaimable")} ${formatBytes(evt.freedBytes || 0)}，${t("progress.elapsed")} ${secs}${t("unit.s")}`
+    : `${t("progress.freed")} ${formatBytes(evt.freedBytes || 0)}，${t("progress.elapsed")} ${secs}${t("unit.s")}`;
 
   $("progress-close").hidden = false;
   $("progress-close").focus();
@@ -578,7 +578,7 @@ async function cleanWithProgress(ids, dryRun) {
 async function runClean(ids, dryRun) {
   state.busy = true;
   updateButtons();
-  setStatus(dryRun ? "生成预览中…" : "清理中…", true);
+  setStatus(dryRun ? t("status.previewing") : t("status.cleaning"), true);
   openProgress(dryRun);
 
   try {
@@ -595,13 +595,13 @@ async function runClean(ids, dryRun) {
 
     showBanner(
       dryRun ? "info" : failed.length ? "warn" : "ok",
-      `<strong>${dryRun ? "预览结果" : "清理完成"}</strong>：` +
-        `${dryRun ? "可释放" : "已释放"} <strong>${formatBytes(result.totalFreedBytes)}</strong>，` +
-        `涉及 ${result.totalDeletedFiles.toLocaleString("zh-CN")} 个文件，` +
-        `用时 ${(result.durationMs / 1000).toFixed(2)}s。` +
-        (failed.length ? ` 失败 ${failed.length} 项。` : "") +
+      `<strong>${dryRun ? t("clean.previewResult") : t("clean.done")}</strong>：` +
+        `${dryRun ? t("clean.reclaimable") : t("clean.freed")} <strong>${formatBytes(result.totalFreedBytes)}</strong>，` +
+        `${t("clean.involving")} ${result.totalDeletedFiles.toLocaleString("zh-CN")} ${t("unit.files")}，` +
+        `${t("clean.elapsed")} ${(result.durationMs / 1000).toFixed(2)}${t("unit.s")}。` +
+        (failed.length ? ` ${t("clean.failed")} ${failed.length} ${t("unit.items")}。` : "") +
         `<ul>${lines}</ul>` +
-        (dryRun ? `<p>确认无误后点击「执行清理」。</p>` : "")
+        (dryRun ? `<p>${t("clean.confirmHint")}</p>` : "")
     );
 
     if (!dryRun) {
@@ -611,11 +611,11 @@ async function runClean(ids, dryRun) {
       scan().catch(() => {});
       return;
     }
-    setStatus("预览完成");
+    setStatus(t("status.previewDone"));
   } catch (err) {
     closeProgress();
-    showBanner("error", `清理失败：${err.message}`);
-    setStatus("清理失败");
+    showBanner("error", `${t("clean.failed")}：${err.message}`);
+    setStatus(t("status.cleanFailed"));
   } finally {
     state.busy = false;
     updateButtons();
@@ -647,14 +647,14 @@ function renderDrives(drives) {
         <span class="drive-card-name">${escapeHtml(d.name)}</span>
         <span class="drive-card-pct">${pct.toFixed(0)}%</span>
       </div>
-      <div class="drive-card-label">${escapeHtml(d.label || d.format || "本地磁盘")}</div>
+      <div class="drive-card-label">${escapeHtml(d.label || d.format || t("disk.localDisk"))}</div>
       <div class="drive-card-bar ${level}"><span style="width:${pct.toFixed(1)}%"></span></div>
       <div class="drive-card-meta">
-        <span>已用 ${formatBytes(d.usedBytes)}</span>
-        <span>共 ${formatBytes(d.totalBytes)}</span>
+        <span>${t("disk.used")} ${formatBytes(d.usedBytes)}</span>
+        <span>${t("disk.total")} ${formatBytes(d.totalBytes)}</span>
       </div>
       <div class="drive-card-meta">
-        <span>可用 ${formatBytes(d.freeBytes)}</span>
+        <span>${t("disk.free")} ${formatBytes(d.freeBytes)}</span>
       </div>`;
 
     card.addEventListener("click", () => selectDrive(d.name));
@@ -669,12 +669,12 @@ function renderDrives(drives) {
     all.setAttribute("aria-pressed", String(state.currentDrive === null));
     all.innerHTML = `
       <div class="drive-card-top">
-        <span class="drive-card-name">全部</span>
+        <span class="drive-card-name">${t("disk.all")}</span>
       </div>
-      <div class="drive-card-label">不限磁盘</div>
+      <div class="drive-card-label">${t("disk.unrestricted")}</div>
       <div class="drive-card-bar"><span style="width:0%"></span></div>
       <div class="drive-card-meta">
-        <span>${drives.length} 个磁盘</span>
+        <span>${drives.length} ${t("disk.drives")}</span>
       </div>`;
     all.addEventListener("click", () => selectDrive(null));
     wrap.appendChild(all);
@@ -688,7 +688,7 @@ function selectDrive(drive) {
   state.inventoryLoaded.files = false;
   state.inventoryLoaded.folders = false;
 
-  const label = drive ? `${drive}` : "全部磁盘";
+  const label = drive ? `${drive}` : t("disk.all");
   $("apps-drive-label").textContent = label;
   $("files-drive-label").textContent = label;
   $("folders-drive-label").textContent = label;
@@ -721,7 +721,7 @@ async function loadDrives() {
     const initial = state.currentDrive ?? (drives.length > 0 ? drives[0].name : null);
     selectDrive(initial);
   } catch (err) {
-    showBanner("error", `读取磁盘信息失败：${err.message}`);
+    showBanner("error", `${t("disk.loadFailed")}${err.message}`);
   }
 }
 
@@ -735,7 +735,7 @@ async function refreshDrives() {
 function renderInventoryRows(container, rows) {
   container.innerHTML = "";
   if (rows.length === 0) {
-    container.innerHTML = '<div class="empty" style="padding:32px"><p>没有数据</p></div>';
+    container.innerHTML = `<div class="empty" style="padding:32px"><p>${t("disk.noData")}</p></div>`;
     return;
   }
 
@@ -768,8 +768,8 @@ async function loadApps(force = false) {
   if (state.inventoryLoaded.apps && !force) return;
 
   state.busy = true;
-  setStatus("正在统计已安装程序…", true);
-  $("apps-note").textContent = "统计中…（需要遍历安装目录，可能要十几秒）";
+  setStatus(t("status.loadingApps"), true);
+  $("apps-note").textContent = t("status.loadingAppsDetail");
   $("apps-list").innerHTML = "";
 
   try {
@@ -777,15 +777,15 @@ async function loadApps(force = false) {
     const qs = drive ? `?drive=${encodeURIComponent(drive)}` : "";
     const data = await api(`/api/inventory/apps${qs}`);
     $("apps-total").textContent = formatBytes(data.totalBytes);
-    $("apps-note").textContent = `${data.count} 个程序，用时 ${(data.durationMs / 1000).toFixed(1)}s`;
+    $("apps-note").textContent = `${data.count} ${t("unit.apps")}，${t("clean.elapsed")} ${(data.durationMs / 1000).toFixed(1)}${t("unit.s")}`;
 
     state.apps = data.apps;
     renderApps();
     state.inventoryLoaded.apps = true;
-    setStatus("就绪");
+    setStatus(t("status.ready"));
   } catch (err) {
-    $("apps-note").textContent = `统计失败：${err.message}`;
-    setStatus("统计失败");
+    $("apps-note").textContent = `${t("scan.failed")}${err.message}`;
+    setStatus(t("status.scanFailed"));
   } finally {
     state.busy = false;
   }
@@ -822,7 +822,7 @@ function renderApps() {
 
   if (apps.length === 0) {
     host.className = "";
-    host.innerHTML = '<div class="empty" style="padding:32px"><p>没有数据</p></div>';
+    host.innerHTML = `<div class="empty" style="padding:32px"><p>${t("disk.noData")}</p></div>`;
     return;
   }
 
@@ -887,7 +887,7 @@ function renderApps() {
 
     const sub = document.createElement("div");
     sub.className = "app-sub";
-    sub.textContent = app.installLocation + (app.locationMissing ? "  (目录已不存在)" : "");
+    sub.textContent = app.installLocation + (app.locationMissing ? `  (${t("disk.locationMissing")})` : "");
     sub.title = app.installLocation;
 
     const bar = document.createElement("div");
@@ -902,7 +902,7 @@ function renderApps() {
     size.className = "app-size";
     size.textContent = formatBytes(app.bytes);
     const files = document.createElement("small");
-    files.textContent = `${(app.fileCount || 0).toLocaleString("zh-CN")} 文件`;
+    files.textContent = `${(app.fileCount || 0).toLocaleString("zh-CN")} ${t("unit.files")}`;
     size.appendChild(files);
 
     row.append(appIconEl(app), main, size);
@@ -913,12 +913,12 @@ function renderApps() {
 async function loadLargeFiles() {
   if (state.busy) return;
   state.busy = true;
-  setStatus("正在查找大文件…", true);
+  setStatus(t("status.findingLargeFiles"), true);
 
   // Large files only make sense per volume; fall back to the first drive when
   // "all drives" is selected.
   const drive = state.currentDrive || (state.drives[0]?.name ?? "C:\\");
-  $("files-note").textContent = `扫描 ${drive} 中…`;
+  $("files-note").textContent = `${t("disk.scanning")} ${drive} …`;
   $("files-list").innerHTML = "";
 
   const minMb = Number($("file-min").value) || 100;
@@ -928,7 +928,7 @@ async function loadLargeFiles() {
       `/api/inventory/large-files?root=${encodeURIComponent(drive)}&minMb=${minMb}&take=50`
     );
     $("files-total").textContent = formatBytes(data.totalBytes);
-    $("files-note").textContent = `找到 ${data.count} 个 ≥${minMb}MB 的文件`;
+    $("files-note").textContent = `${t("disk.found")} ${data.count} ${t("disk.foundFiles")} ≥${minMb}MB`;
 
     renderInventoryRows(
       $("files-list"),
@@ -940,10 +940,10 @@ async function loadLargeFiles() {
       }))
     );
     state.inventoryLoaded.files = true;
-    setStatus("就绪");
+    setStatus(t("status.ready"));
   } catch (err) {
-    $("files-note").textContent = `扫描失败：${err.message}`;
-    setStatus("扫描失败");
+    $("files-note").textContent = `${t("scan.failed")}${err.message}`;
+    setStatus(t("status.scanFailed"));
   } finally {
     state.busy = false;
   }
@@ -952,17 +952,17 @@ async function loadLargeFiles() {
 async function loadFolders() {
   if (state.busy) return;
   state.busy = true;
-  setStatus("正在统计目录体积…", true);
+  setStatus(t("status.measuringFolders"), true);
 
   const drive = state.currentDrive || (state.drives[0]?.name ?? "C:\\");
-  $("folders-note").textContent = `统计 ${drive} 中…`;
+  $("folders-note").textContent = `${t("disk.scanning")} ${drive} …`;
   $("folders-list").innerHTML = "";
 
   try {
     const data = await api(`/api/inventory/folders?drive=${encodeURIComponent(drive)}`);
     const total = data.folders.reduce((s, f) => s + f.bytes, 0);
     $("folders-total").textContent = formatBytes(total);
-    $("folders-note").textContent = `${data.folders.length} 个目录`;
+    $("folders-note").textContent = `${data.folders.length} ${t("unit.dirs")}`;
 
     renderInventoryRows(
       $("folders-list"),
@@ -970,14 +970,14 @@ async function loadFolders() {
         title: f.name,
         sub: f.path,
         bytes: f.bytes,
-        detail: `${f.fileCount.toLocaleString("zh-CN")} 文件`,
+        detail: `${f.fileCount.toLocaleString("zh-CN")} ${t("unit.files")}`,
       }))
     );
     state.inventoryLoaded.folders = true;
-    setStatus("就绪");
+    setStatus(t("status.ready"));
   } catch (err) {
-    $("folders-note").textContent = `统计失败：${err.message}`;
-    setStatus("统计失败");
+    $("folders-note").textContent = `${t("scan.failed")}${err.message}`;
+    setStatus(t("status.scanFailed"));
   } finally {
     state.busy = false;
   }
@@ -994,12 +994,12 @@ async function loadRules() {
     if (data.rejected.length) {
       showBanner(
         "warn",
-        `有 ${data.rejected.length} 条规则未通过安全策略：` +
+        `${t("rules.rejectedPrefix")} ${data.rejected.length} ${t("rules.rejectedSuffix")}：` +
           data.rejected.map((r) => `<code>${escapeHtml(r.id)}</code> — ${escapeHtml(r.reason)}`).join("；")
       );
     }
   } catch (err) {
-    showBanner("error", `加载规则失败：${err.message}`);
+    showBanner("error", `${t("rules.loadFailed")}${err.message}`);
   }
 }
 
@@ -1018,9 +1018,9 @@ async function changeRuleList(rule, enabled) {
     state.rules = data.targets;
     drawRules();
     invalidateScan();
-    setStatus(`「${rule.name}」已加入${enabled ? "白名单，可被清理" : "黑名单，不会被清理"}`);
+    setStatus(`「${rule.name}」${enabled ? t("rules.movedToWhite") : t("rules.movedToBlack")}`);
   } catch (err) {
-    showBanner("error", `修改失败：${err.message}`);
+    showBanner("error", `${t("rules.changeFailed")}${err.message}`);
     throw err;
   }
 }
@@ -1033,7 +1033,7 @@ function invalidateScan() {
   $("toolbar").hidden = true;
   $("list").innerHTML = "";
   $("empty").hidden = false;
-  $("empty").querySelector("p").textContent = "规则已修改，请重新体检";
+  $("empty").querySelector("p").textContent = t("rules.rescanHint");
 }
 
 async function moveAllRules(enabled, predicate = () => true) {
@@ -1048,15 +1048,15 @@ async function moveAllRules(enabled, predicate = () => true) {
     state.rules = data.targets;
     drawRules();
     invalidateScan();
-    setStatus(`${ids.length} 条规则已移入${enabled ? "白名单" : "黑名单"}`);
+    setStatus(`${ids.length} ${t("unit.rules")}${enabled ? t("rules.movedToWhite") : t("rules.movedToBlack")}`);
   } catch (err) {
-    showBanner("error", `操作失败：${err.message}`);
+    showBanner("error", `${t("rules.changeFailed")}${err.message}`);
   }
 }
 async function addCustomRule() {
   const path = $("custom-path").value.trim();
   if (!path) {
-    showBanner("warn", "请填写路径。");
+    showBanner("warn", t("rules.pathRequired"));
     return;
   }
 
@@ -1072,22 +1072,22 @@ async function addCustomRule() {
     });
     $("custom-path").value = "";
     $("custom-name").value = "";
-    showBanner("ok", "自定义规则已添加，默认为白名单。");
+    showBanner("ok", t("rules.customAdded"));
     await loadRules();
   } catch (err) {
-    showBanner("error", `添加失败：${escapeHtml(err.message)}`);
+    showBanner("error", `${t("rules.addFailed")}${escapeHtml(err.message)}`);
   }
 }
 
 async function removeCustomRule(rule) {
-  if (!confirm(`删除自定义规则「${rule.name}」？\n\n只会移除规则，不会删除任何文件。`)) return;
+  if (!confirm(t("rules.deleteConfirmPrefix") + rule.name + t("rules.deleteConfirmSuffix"))) return;
 
   try {
     await api(`/api/targets/custom/${encodeURIComponent(rule.id)}`, { method: "DELETE" });
-    showBanner("ok", "规则已删除。");
+    showBanner("ok", t("rules.deleted"));
     await loadRules();
   } catch (err) {
-    showBanner("error", `删除失败：${err.message}`);
+    showBanner("error", `${t("rules.deleteFailed")}${err.message}`);
   }
 }
 
@@ -1097,17 +1097,17 @@ async function showAudit() {
   try {
     const lines = await api("/api/audit");
     openModal(
-      "最近操作",
+      t("settings.viewAudit"),
       `<pre style="max-height:46vh;overflow:auto;font-family:var(--font-mono);font-size:11.5px;line-height:1.7;white-space:pre-wrap">${lines
         .slice(-60)
         .map(escapeHtml)
         .join("\n")}</pre>`,
       closeModal,
-      "关闭"
+      t("action.done")
     );
     $("modal-ok").className = "btn primary";
   } catch (err) {
-    showBanner("error", `读取日志失败：${err.message}`);
+    showBanner("error", `${t("audit.loadFailed")}${err.message}`);
   }
 }
 
@@ -1116,7 +1116,7 @@ async function showAudit() {
 function openModal(title, bodyHtml, onConfirm, okLabel) {
   $("modal-title").textContent = title;
   $("modal-body").innerHTML = bodyHtml;
-  $("modal-ok").textContent = okLabel || "确认执行";
+  $("modal-ok").textContent = okLabel || t("action.confirm");
   $("confirm-modal").hidden = false;
   state.pendingAction = onConfirm;
 }
@@ -1240,7 +1240,7 @@ $("btn-black-caution").addEventListener("click", () =>
   moveAllRules(false, (r) => r.risk === "Caution" && r.enabled)
 );
 $("btn-black-all").addEventListener("click", () => {
-  if (!confirm("把所有规则都移入黑名单？清理功能将无内容可清。")) return;
+  if (!confirm(t("rules.allBlackConfirm"))) return;
   moveAllRules(false);
 });
 $("btn-add-custom").addEventListener("click", addCustomRule);
@@ -1298,7 +1298,7 @@ $("btn-show-audit").addEventListener("click", showAudit);
 
   api("/api/health")
     .then((h) => {
-      $("about-version").textContent = `${h.app} v${h.version} · ${h.os}${h.webview ? " · 桌面模式" : ""}`;
+      $("about-version").textContent = `${h.app} v${h.version} · ${h.os}${h.webview ? ` · ${t("health.desktopMode")}` : ""}`;
     })
     .catch(() => {});
 
@@ -1311,5 +1311,5 @@ $("btn-show-audit").addEventListener("click", showAudit);
   // Post after first paint too: the WebView2 host is not always listening when
   // the page boots, so a second post guards against a dropped first message.
   setTimeout(() => notifyHost(state.theme), 700);
-  setStatus("就绪");
+  setStatus(t("status.ready"));
 })();

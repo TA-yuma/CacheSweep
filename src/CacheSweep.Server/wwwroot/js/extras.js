@@ -24,7 +24,7 @@ async function loadPlugins() {
     pluginState.items = data.plugins;
     renderPlugins();
   } catch (err) {
-    showBanner("error", `加载插件失败：${err.message}`);
+    showBanner("error", `${tr("plugins.loadFailed")}${err.message}`);
   }
 }
 
@@ -33,9 +33,10 @@ function renderPlugins() {
   host.innerHTML = "";
 
   const installed = pluginState.items.filter((p) => p.installed).length;
-  $("plugins-note").textContent =
-    `${installed} / ${pluginState.items.length} 已安装 · ` +
-    `未安装的插件不会被扫描`;
+  const note = tr("plugins.count")
+    .replace("{n}", installed)
+    .replace("{m}", pluginState.items.length);
+  $("plugins-note").textContent = note;
 
   for (const plugin of pluginState.items) {
     const card = document.createElement("div");
@@ -148,13 +149,13 @@ async function togglePlugin(plugin, action) {
     }
     setStatus(
       action === "install"
-        ? `已安装「${plugin.name}」插件`
+        ? `${tr("plugins.installedPrefix")}「${plugin.name}」${tr("plugins.installedPlugin")}`
         : action === "uninstall"
-          ? `已卸载「${plugin.name}」`
-          : `「${plugin.name}」已${plugin.disabled ? "启用" : "停用"}`
+          ? `${tr("plugins.uninstalledPrefix")}「${plugin.name}」`
+          : `「${plugin.name}」${plugin.disabled ? tr("plugins.enabled") : tr("plugins.disabled")}`
     );
   } catch (err) {
-    showBanner("error", `操作失败：${err.message}`);
+    showBanner("error", `${tr("plugins.actionFailed")}${err.message}`);
   } finally {
     pluginState.busy = false;
   }
@@ -170,7 +171,7 @@ async function loadAutoClean() {
     $("auto-time").value = settings.timeOfDay || "03:00";
     renderAutoLast(settings);
   } catch (err) {
-    showBanner("error", `读取自动清理设置失败：${err.message}`);
+    showBanner("error", `${tr("auto.loadFailed")}${err.message}`);
   }
 }
 
@@ -183,7 +184,7 @@ function renderAutoLast(settings) {
 
   const when = new Date(settings.lastRunUtc);
   const freed = formatBytes(settings.lastRunFreedBytes || 0);
-  el.textContent = `${t("auto.lastRun")}: ${when.toLocaleString()} · ${freed}`;
+  el.textContent = `${tr("auto.lastRun")}: ${when.toLocaleString()} · ${freed}`;
 }
 
 async function saveAutoClean() {
@@ -200,33 +201,33 @@ async function saveAutoClean() {
       body: JSON.stringify(settings),
     });
     renderAutoLast(saved);
-    setStatus(saved.enabled ? "自动清理已开启" : "自动清理已关闭");
+    setStatus(saved.enabled ? tr("auto.enabledOn") : tr("auto.enabledOff"));
   } catch (err) {
-    showBanner("error", `保存失败：${err.message}`);
+    showBanner("error", `${tr("auto.saveFailed")}${err.message}`);
   }
 }
 
 async function runAutoCleanNow() {
   const button = $("btn-auto-run");
   button.disabled = true;
-  button.textContent = "执行中…";
+  button.textContent = tr("auto.running");
 
   try {
     const rec = await api("/api/autoclean/run", { method: "POST" });
     if (rec.skipped) {
-      showBanner("warn", `自动清理跳过：${rec.reason || "没有可清理的缓存规则"}`);
+      showBanner("warn", `${tr("auto.skipped")}：${rec.reason || tr("auto.noRules")}`);
     } else {
       showBanner(
         "ok",
-        `<strong>自动清理完成</strong>：释放 <strong>${formatBytes(rec.freedBytes)}</strong>，` +
-          `${rec.deletedFiles.toLocaleString("zh-CN")} 个文件` +
-          (rec.failures ? `，${rec.failures} 项失败` : "")
+        `<strong>${tr("auto.done")}</strong>：${tr("clean.freed")} <strong>${formatBytes(rec.freedBytes)}</strong>，` +
+          `${rec.deletedFiles.toLocaleString("zh-CN")} ${tr("unit.files")}` +
+          (rec.failures ? `，${rec.failures} ${tr("unit.items")} ${tr("clean.failed")}` : "")
       );
     }
     await loadAutoClean();
     if (typeof scan === "function") scan().catch(() => {});
   } catch (err) {
-    showBanner("error", `执行失败：${err.message}`);
+    showBanner("error", `${tr("auto.runFailed")}${err.message}`);
   } finally {
     button.disabled = false;
     button.textContent = tr("auto.runNow");
@@ -281,7 +282,7 @@ async function checkForUpdates() {
 
   button.disabled = true;
   button.classList.add("is-busy");
-  button.textContent = "检查中…";
+  button.textContent = tr("update.checking");
   box.hidden = true;
 
   try {
@@ -293,14 +294,14 @@ async function checkForUpdates() {
     if (r.status === "update-available") {
       box.classList.add("new");
       box.innerHTML =
-        `<strong>发现新版本 ${escapeHtml(r.latestVersion || "")}</strong>（当前 v${escapeHtml(r.currentVersion)}）` +
-        (r.releaseUrl ? `<br><a href="${escapeHtml(r.releaseUrl)}" target="_blank" rel="noopener">前往下载</a>` : "");
+        `<strong>${tr("update.newVersion")} ${escapeHtml(r.latestVersion || "")}</strong>（${tr("update.current")} v${escapeHtml(r.currentVersion)}）` +
+        (r.releaseUrl ? `<br><a href="${escapeHtml(r.releaseUrl)}" target="_blank" rel="noopener">${tr("update.download")}</a>` : "");
     } else if (r.status === "up-to-date") {
       box.classList.add("ok");
-      box.textContent = `已是最新版本（v${r.currentVersion}）`;
+      box.textContent = `${tr("update.upToDate")}（v${r.currentVersion}）`;
     } else if (r.status === "no-release") {
       box.classList.add("muted");
-      box.textContent = r.message;
+      box.textContent = tr("update.noRelease");
     } else {
       box.classList.add("warn");
       box.textContent = r.message;
@@ -308,11 +309,11 @@ async function checkForUpdates() {
   } catch (err) {
     box.hidden = false;
     box.className = "update-result warn";
-    box.textContent = `检查失败：${err.message}`;
+    box.textContent = `${tr("update.checkFailed")}：${err.message}`;
   } finally {
     button.disabled = false;
     button.classList.remove("is-busy");
-    button.textContent = "检查更新";
+    button.textContent = tr("settings.checkUpdate");
   }
 }
 
@@ -342,6 +343,44 @@ async function setLanguage(lang) {
   setStatus(tr("status.ready"));
 }
 
+/* ---------------- font settings ---------------- */
+
+const FONT_SIZE_KEY = "cachesweep.fontSize";
+const FONT_FAMILY_KEY = "cachesweep.fontFamily";
+
+const FONT_SIZES = { small: "15px", normal: "16px", large: "17.5px" };
+const FONT_FAMILIES = {
+  system: '"Segoe UI Variable Display", "Segoe UI", system-ui, "Microsoft YaHei", sans-serif',
+  yahei: '"Microsoft YaHei UI", "Microsoft YaHei", "Segoe UI", sans-serif',
+  mono: '"Cascadia Code", Consolas, "Microsoft YaHei", monospace',
+};
+
+function applyFontSize(size) {
+  const px = FONT_SIZES[size] || FONT_SIZES.normal;
+  document.documentElement.style.setProperty("--root-font-size", px);
+  try { localStorage.setItem(FONT_SIZE_KEY, size); } catch {}
+}
+
+function applyFontFamily(family) {
+  const stack = FONT_FAMILIES[family] || FONT_FAMILIES.system;
+  document.documentElement.style.setProperty("--font-ui", stack);
+  try { localStorage.setItem(FONT_FAMILY_KEY, family); } catch {}
+}
+
+function loadFontSettings() {
+  let size = "normal";
+  let family = "system";
+  try {
+    const s = localStorage.getItem(FONT_SIZE_KEY);
+    if (s && FONT_SIZES[s]) size = s;
+    const f = localStorage.getItem(FONT_FAMILY_KEY);
+    if (f && FONT_FAMILIES[f]) family = f;
+  } catch {}
+  applyFontSize(size);
+  applyFontFamily(family);
+  return { size, family };
+}
+
 /* ---------------- init ---------------- */
 
 function initExtras() {
@@ -349,6 +388,14 @@ function initExtras() {
   const saved = document.documentElement.dataset.lang || "zh";
   window.CacheSweepI18n.applyLanguage(saved);
   $("lang-select").value = saved;
+
+  // Font settings: restore before anything else renders so there is no flash.
+  const font = loadFontSettings();
+  $("font-size-select").value = font.size;
+  $("font-family-select").value = font.family;
+
+  $("font-size-select").addEventListener("change", (e) => applyFontSize(e.target.value));
+  $("font-family-select").addEventListener("change", (e) => applyFontFamily(e.target.value));
 
   $("lang-select").addEventListener("change", (e) => setLanguage(e.target.value));
 
@@ -368,7 +415,7 @@ function initExtras() {
   const valueLabel = $("feedback-value");
 
   const applyRangeUi = (level) => {
-    const labels = ["关闭", "标准", "强烈"];
+    const labels = [tr("settings.feedbackOff"), tr("settings.feedbackNormal"), tr("settings.feedbackStrong")];
     valueLabel.textContent = labels[level] || labels[1];
     // Fill the track up to the thumb.
     range.style.setProperty("--range-pct", `${(level / 2) * 100}%`);

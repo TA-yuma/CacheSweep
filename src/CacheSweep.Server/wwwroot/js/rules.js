@@ -9,17 +9,14 @@
  * blacklist.
  */
 
-const RULE_CATEGORY_LABEL = {
-  TempFiles: "临时文件",
-  BrowserCache: "浏览器缓存",
-  AppCache: "应用缓存",
-  SystemCache: "系统缓存",
-  DeveloperCache: "开发者缓存",
-  CrashAndDiagnostics: "崩溃与诊断",
-  RecycleBin: "回收站",
-};
+/* Category and risk labels resolve through the active language. */
+function ruleCategoryLabel(cat) {
+  return t(`category.${cat}`) || cat;
+}
 
-const RULE_RISK_LABEL = { Safe: "安全", Caution: "需确认", Dangerous: "高风险" };
+function ruleRiskLabel(risk) {
+  return t(`risk.${risk}`) || risk;
+}
 
 function ruleEscape(value) {
   return String(value ?? "")
@@ -42,8 +39,8 @@ function buildRuleRow(rule, onChange) {
   title.className = "row-title";
   title.innerHTML =
     `<span class="rule-name">${ruleEscape(rule.name)}</span>` +
-    `<span class="badge ${rule.risk}">${RULE_RISK_LABEL[rule.risk] || rule.risk}</span>` +
-    (rule.isCustom ? '<span class="badge cat">自定义</span>' : "");
+    `<span class="badge ${rule.risk}">${ruleRiskLabel(rule.risk)}</span>` +
+    (rule.isCustom ? `<span class="badge cat">${t("rules.custom")}</span>` : "");
 
   const path = document.createElement("div");
   path.className = "row-path";
@@ -67,15 +64,15 @@ function buildRuleRow(rule, onChange) {
   const white = document.createElement("button");
   white.type = "button";
   white.className = `seg-btn seg-white${rule.enabled ? " active" : ""}`;
-  white.textContent = "白名单";
-  white.title = "白名单：允许被主动清理";
+  white.textContent = t("rules.whitelist");
+  white.title = t("rules.whiteHint");
   white.setAttribute("aria-pressed", String(rule.enabled));
 
   const black = document.createElement("button");
   black.type = "button";
   black.className = `seg-btn seg-black${rule.enabled ? "" : " active"}`;
-  black.textContent = "黑名单";
-  black.title = "黑名单：不主动清理，扫描时跳过";
+  black.textContent = t("rules.blacklist");
+  black.title = t("rules.blackHint");
   black.setAttribute("aria-pressed", String(!rule.enabled));
 
   const choose = async (enabled) => {
@@ -97,7 +94,7 @@ function buildRuleRow(rule, onChange) {
   if (rule.isCustom) {
     const del = document.createElement("button");
     del.className = "icon-btn";
-    del.title = "删除这条自定义规则（不会删除任何文件）";
+    del.title = t("rules.deleteHint");
     del.innerHTML =
       '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13"/></svg>';
     del.addEventListener("click", () => rule._onDelete?.(rule));
@@ -117,7 +114,7 @@ function renderRuleList(container, rules, onChange, onDelete) {
 
   const summary = document.getElementById("rules-count");
   if (summary) {
-    summary.textContent = `白名单 ${white} 条 · 黑名单 ${black} 条`;
+    summary.textContent = `${t("rules.whitelist")} ${white} ${t("unit.rules")} · ${t("rules.blacklist")} ${black} ${t("unit.rules")}`;
   }
 
   const groups = new Map();
@@ -131,11 +128,11 @@ function renderRuleList(container, rules, onChange, onDelete) {
     card.className = "card rule-card";
 
     const heading = document.createElement("h3");
-    heading.textContent = RULE_CATEGORY_LABEL[category] || category;
+    heading.textContent = ruleCategoryLabel(category);
 
     const count = document.createElement("span");
     count.className = "rule-card-count";
-    count.textContent = `${list.filter((r) => r.enabled).length}/${list.length} 白名单`;
+    count.textContent = `${list.filter((r) => r.enabled).length}/${list.length} ${t("rules.whitelist")}`;
     heading.appendChild(count);
     card.appendChild(heading);
 
@@ -149,4 +146,4 @@ function renderRuleList(container, rules, onChange, onDelete) {
 }
 
 // Exposed on window because the page loads plain scripts, not modules.
-window.CacheSweepRules = { buildRuleRow, renderRuleList, RULE_CATEGORY_LABEL, RULE_RISK_LABEL };
+window.CacheSweepRules = { buildRuleRow, renderRuleList };
