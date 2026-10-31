@@ -26,6 +26,8 @@ const state = {
   drives: [],
   /** Currently selected drive (e.g. "D:\\"), or null for "all drives". */
   currentDrive: null,
+  /** Drive chosen in the scan dropdown; null = scan all drives. */
+  scanDrive: null,
   /** Installed apps for the selected drive, kept so the view can re-render. */
   apps: [],
   /** Installed-app layout: "list" | "grid" | "compact". */
@@ -346,7 +348,9 @@ async function scan() {
   setStatus(t("status.scanning"), true);
 
   try {
-    const data = await api("/api/scan", { method: "POST" });
+    // Respect the drive picked in the scan dropdown; null = scan everything.
+    const body = state.scanDrive ? JSON.stringify({ drive: state.scanDrive }) : "{}";
+    const data = await api("/api/scan", { method: "POST", body });
     state.scan = data;
     renderSummary(data);
     renderList();
@@ -1129,8 +1133,70 @@ function closeModal() {
 /* ---------------- wiring ---------------- */
 
 $("btn-scan").addEventListener("click", scan);
+$("btn-big-scan").addEventListener("click", scan);
 $("btn-preview").addEventListener("click", () => requestClean(true));
 $("btn-clean").addEventListener("click", () => requestClean(false));
+
+/* Scan-drive dropdown: pick which volume to scan. */
+$("btn-scan-drive").addEventListener("click", async (e) => {
+  e.stopPropagation();
+  await openScanDriveMenu();
+});
+
+document.addEventListener("click", (e) => {
+  if (!e.target.closest(".scan-combo")) {
+    $("scan-drive-menu").hidden = true;
+  }
+});
+
+async function openScanDriveMenu() {
+  const menu = $("scan-drive-menu");
+  if (!menu.hidden) {
+    menu.hidden = true;
+    return;
+  }
+
+  // Load drives on first open, or reuse what the analysis view already has.
+  let drives = state.drives;
+  if (!drives.length) {
+    try {
+      drives = await api("/api/inventory/drives");
+      state.drives = drives;
+    } catch {
+      drives = [];
+    }
+  }
+
+  menu.innerHTML = "";
+
+  // "All drives" option.
+  const all = document.createElement("button");
+  all.type = "button";
+  all.innerHTML = `<span>${t("disk.all")}</span><span class="drv-meta">${t("disk.unrestricted")}</span>`;
+  all.classList.toggle("is-active", state.scanDrive === null);
+  all.addEventListener("click", () => {
+    state.scanDrive = null;
+    menu.hidden = true;
+    scan();
+  });
+  menu.appendChild(all);
+
+  for (const d of drives) {
+    const b = document.createElement("button");
+    b.type = "button";
+    const meta = `${formatBytes(d.usedBytes)} / ${formatBytes(d.totalBytes)}`;
+    b.innerHTML = `<span>${escapeHtml(d.name)} ${escapeHtml(d.label || "")}</span><span class="drv-meta">${meta}</span>`;
+    b.classList.toggle("is-active", state.scanDrive === d.name);
+    b.addEventListener("click", () => {
+      state.scanDrive = d.name;
+      menu.hidden = true;
+      scan();
+    });
+    menu.appendChild(b);
+  }
+
+  menu.hidden = false;
+}
 
 $("tab-sweep").addEventListener("click", () => showView("sweep"));
 $("tab-disk").addEventListener("click", () => showView("disk"));

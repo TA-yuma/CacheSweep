@@ -91,16 +91,38 @@ public sealed class SweepService
 
     public IReadOnlyList<CleanTarget> AllTargets => Targets;
 
-    public ScanReport Scan(CancellationToken ct)
+    public ScanReport Scan(CancellationToken ct, string? drive = null)
     {
-        var report = new Scanner(Targets).Scan(ct);
+        var targets = Targets;
+        if (!string.IsNullOrWhiteSpace(drive))
+        {
+            // Restrict the scan to cache targets living on the selected volume.
+            var prefix = NormalizeDrive(drive);
+            targets = targets
+                .Where(t => t.Path.StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
+                .ToList();
+        }
+
+        var report = new Scanner(targets).Scan(ct);
         lock (_gate)
         {
             _lastReport = report;
         }
 
-        Log($"scan: {report.Items.Count} targets, {report.TotalBytes} bytes, {report.ScanDurationMs} ms");
+        Log($"scan: {report.Items.Count} targets, {report.TotalBytes} bytes, {report.ScanDurationMs} ms"
+            + (drive is null ? "" : $" (drive={drive})"));
         return report;
+    }
+
+    /// <summary>Normalizes a drive argument to the "X:\" form used for prefix matching.</summary>
+    private static string NormalizeDrive(string drive)
+    {
+        var trimmed = drive.Trim();
+        if (trimmed.Length == 2 && trimmed[1] == ':')
+        {
+            return trimmed + "\\";
+        }
+        return trimmed.EndsWith('\\') ? trimmed : trimmed + "\\";
     }
 
     public CleanResult Clean(
@@ -652,6 +674,9 @@ public sealed record CleanRequest(
     bool DryRun = true,
     bool UseRecycleBin = true,
     bool AllowDangerous = false);
+
+/// <summary>Scan request. Drive is optional; when omitted, every drive is scanned.</summary>
+public sealed record ScanRequest(string? Drive = null);
 
 public sealed record ToggleRequest(IReadOnlyList<string> TargetIds, bool Enabled);
 

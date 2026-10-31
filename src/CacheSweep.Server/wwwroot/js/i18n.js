@@ -55,6 +55,7 @@ const I18N = {
 
     "sweep.emptyTitle": "点击「开始体检」扫描本机缓存占用",
     "sweep.emptyHint": "扫描完全只读，不会删除任何文件",
+    "sweep.bigScanHint": "扫描本机缓存占用，只读不删除",
     "sweep.noCacheTitle": "没有发现可清理的缓存目录",
     "sweep.noCacheHint": "这是好事，说明没有已知缓存被占用",
 
@@ -350,6 +351,7 @@ const I18N = {
 
     "sweep.emptyTitle": "Click 'Scan now' to inspect this machine's cache usage",
     "sweep.emptyHint": "Scanning is strictly read-only; nothing is deleted",
+    "sweep.bigScanHint": "Inspect cache usage, read-only",
     "sweep.noCacheTitle": "No cleanable cache folders found",
     "sweep.noCacheHint": "That's good news — no known cache is taking up space",
 
@@ -645,6 +647,7 @@ const I18N = {
 
     "sweep.emptyTitle": "Нажмите «Проверить», чтобы проанализировать кэш",
     "sweep.emptyHint": "Проверка только читает и ничего не удаляет",
+    "sweep.bigScanHint": "Проверить кэш, только чтение",
     "sweep.noCacheTitle": "Папок кэша для очистки не найдено",
     "sweep.noCacheHint": "Это хорошо — известный кэш не занимает место",
 

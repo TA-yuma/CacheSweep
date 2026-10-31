@@ -74,9 +74,9 @@ public static class ApiEndpoints
 
     private static void MapScanAndClean(RouteGroupBuilder api)
     {
-        api.MapPost("/scan", async (SweepService service, CancellationToken ct) =>
+        api.MapPost("/scan", async (ScanRequest request, SweepService service, CancellationToken ct) =>
         {
-            var report = await Task.Run(() => service.Scan(ct), ct);
+            var report = await Task.Run(() => service.Scan(ct, request.Drive), ct);
             return Results.Ok(ToDto(report));
         });
 

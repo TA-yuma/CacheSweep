@@ -109,6 +109,65 @@ body::before {
 
 .actions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 
+/* "开始体检" with a split dropdown arrow to pick which drive to scan. */
+.scan-combo { position: relative; display: inline-flex; align-items: stretch; }
+
+.scan-combo .btn-scan,
+.scan-combo #btn-scan { border-top-right-radius: 0; border-bottom-right-radius: 0; }
+
+.scan-combo .scan-arrow {
+  border-top-left-radius: 0;
+  border-bottom-left-radius: 0;
+  border-left: 1px solid rgba(255, 255, 255, 0.22);
+  padding: 0 9px;
+  display: inline-flex;
+  align-items: center;
+}
+
+.scan-combo .scan-arrow svg { width: 14px; height: 14px; }
+
+.scan-drive-menu {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  min-width: 200px;
+  background: var(--surface-1);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-3);
+  padding: 5px;
+  z-index: 120;
+  animation: fadeIn 0.14s var(--ease);
+}
+
+.scan-drive-menu button {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  width: 100%;
+  padding: 8px 11px;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--text-dim);
+  font: inherit;
+  font-size: 0.8125rem;
+  cursor: pointer;
+  text-align: left;
+}
+
+.scan-drive-menu button:hover { background: var(--surface-3); color: var(--text); }
+.scan-drive-menu button.is-active { color: var(--accent); font-weight: 700; background: var(--accent-soft); }
+
+.scan-drive-menu button .drv-meta {
+  font-size: 0.6875rem;
+  color: var(--text-faint);
+  font-variant-numeric: tabular-nums;
+}
+
+.scan-drive-menu button.is-active .drv-meta { color: var(--accent); }
+
 /* Tabs: segmented, hierarchy by fill only. */
 .nav {
   display: flex;
@@ -837,7 +896,61 @@ main {
 
 /* ---------------- empty / scanning ---------------- */
 
-.empty { text-align: center; padding: 70px 20px; color: var(--text-dim); animation: fadeIn 0.3s var(--ease); }
+.empty { text-align: center; padding: 64px 20px 72px; color: var(--text-dim); animation: fadeIn 0.3s var(--ease); }
+
+/* The big, can't-miss scan button shown when there is no scan result yet. */
+.big-scan {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 14px;
+  margin: 0 auto 26px;
+  padding: 34px 46px;
+  background: var(--surface-1);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-lg);
+  color: var(--text);
+  cursor: pointer;
+  font: inherit;
+  transition: border-color 0.18s, transform 0.18s var(--ease), box-shadow 0.18s var(--ease);
+}
+
+.big-scan:hover {
+  border-color: var(--accent);
+  transform: translateY(-3px);
+  box-shadow: var(--shadow-3), 0 0 0 1px var(--accent-line);
+}
+
+.big-scan:active { transform: translateY(-1px); }
+
+.big-scan-ring {
+  display: grid;
+  place-items: center;
+  width: 92px;
+  height: 92px;
+  border-radius: 50%;
+  color: var(--accent);
+  background: radial-gradient(circle, var(--accent-soft) 0%, transparent 68%);
+  border: 1px solid var(--accent-line);
+  box-shadow: 0 0 50px -10px var(--accent);
+  animation: bigScanPulse 2.4s ease-in-out infinite;
+}
+
+.big-scan-ring svg { width: 42px; height: 42px; }
+
+@keyframes bigScanPulse {
+  0%, 100% { box-shadow: 0 0 42px -12px var(--accent); }
+  50% { box-shadow: 0 0 70px -8px var(--accent); }
+}
+
+.big-scan-label {
+  font-size: 1.25rem;
+  font-weight: 800;
+  letter-spacing: 2px;
+  color: var(--text);
+}
+
+.big-scan-sub { font-size: 0.75rem; color: var(--text-faint); letter-spacing: 0.4px; }
 
 .empty-logo {
   width: 76px;

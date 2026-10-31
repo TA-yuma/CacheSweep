@@ -74,7 +74,15 @@
       </div>
 
       <span id="machine" class="machine" hidden></span>
-      <button id="btn-scan" class="btn primary" data-i18n="action.scan">开始体检</button>
+      <div class="scan-combo">
+        <button id="btn-scan" class="btn primary" data-i18n="action.scan">开始体检</button>
+        <button id="btn-scan-drive" class="btn primary scan-arrow" data-i18n-aria="disk.heading" aria-label="选择要扫描的硬盘" title="">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M6 9l6 6 6-6" />
+          </svg>
+        </button>
+        <div class="scan-drive-menu" id="scan-drive-menu" hidden></div>
+      </div>
     </div>
   </header>
 
@@ -125,7 +133,16 @@
       <section class="list" id="list"></section>
 
       <section class="empty" id="empty">
-        <img class="empty-logo" src="/assets/icon-256.png" alt="" />
+        <button id="btn-big-scan" class="big-scan" data-i18n-aria="action.scan" aria-label="开始体检">
+          <span class="big-scan-ring" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M21 12a9 9 0 1 1-3.2-6.9" />
+              <path d="M21 3v5h-5" />
+            </svg>
+          </span>
+          <span class="big-scan-label" data-i18n="action.scan">开始体检</span>
+          <span class="big-scan-sub" data-i18n="sweep.bigScanHint">扫描本机缓存占用，只读不删除</span>
+        </button>
         <p data-i18n="sweep.emptyTitle">点击「开始体检」扫描本机缓存占用</p>
         <p class="hint" data-i18n="sweep.emptyHint">扫描完全只读，不会删除任何文件</p>
       </section>
