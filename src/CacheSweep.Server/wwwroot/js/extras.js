@@ -352,7 +352,8 @@ const FONT_SIZES = { small: "15px", normal: "16px", large: "17.5px" };
 const FONT_FAMILIES = {
   system: '"Segoe UI Variable Display", "Segoe UI", system-ui, "Microsoft YaHei", sans-serif',
   yahei: '"Microsoft YaHei UI", "Microsoft YaHei", "Segoe UI", sans-serif',
-  mono: '"Cascadia Code", Consolas, "Microsoft YaHei", monospace',
+  songti: '"SimSun", "宋体", "NSimSun", serif',
+  kaiti: '"KaiTi", "楷体", "STKaiti", serif',
 };
 
 function applyFontSize(size) {

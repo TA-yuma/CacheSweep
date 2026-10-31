@@ -772,6 +772,9 @@ main {
   gap: 12px;
 }
 
+/* The software-intro card spans the full row at the top of settings. */
+.card-full { grid-column: 1 / -1; }
+
 .card {
   padding: 15px;
   border: 1px solid var(--border);
@@ -954,12 +957,16 @@ footer a:hover { color: var(--accent); }
 
 /* ---------------- embedded (desktop shell) ---------------- */
 
-html.embedded .topbar { position: static; padding: 6px 16px; }
+/* In the desktop shell the WebView has no browser chrome, so the app's own
+   tab bar is still the primary navigation and must remain pinned. We only
+   drop the branded logo row; the tabs/theme/scan controls stay fixed at the
+   top. */
+html.embedded .topbar { position: fixed; top: 0; left: 0; right: 0; padding: 8px 16px; }
 html.embedded .brand { display: none; }
 html.embedded .actions { width: 100%; justify-content: flex-start; }
 html.embedded .actions .machine { margin-left: auto; }
-html.embedded .toolbar { top: var(--topbar-h, 0px); }
-html.embedded main { padding-top: 12px; }
+html.embedded .toolbar { top: var(--topbar-h, 52px); }
+html.embedded main { padding-top: calc(var(--topbar-h, 52px) + 12px); }
 
 /* ---------------- responsive ---------------- */
 

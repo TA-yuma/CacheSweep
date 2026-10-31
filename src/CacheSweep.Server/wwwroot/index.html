@@ -272,6 +272,13 @@
     <!-- ============ view: settings ============ -->
     <section class="view" id="view-settings" hidden>
       <div class="settings-grid">
+        <div class="card card-full">
+          <h3 data-i18n="settings.introTitle">软件简介</h3>
+          <p class="card-sub" data-i18n="settings.introBody">
+            CacheSweep 是一款开源的 Windows 磁盘清理工具：一键体检本机所有缓存位置，看清是什么在占用硬盘，再安全地清理。扫描只读、删除进回收站、绝不触碰文档与系统文件。支持三套主题（含半透明）、中英俄三种语言、可调节的字体与点击反馈，还内置浏览器/微信/QQ 等插件和定时自动清理。
+          </p>
+        </div>
+
         <div class="card">
           <h3 data-i18n="settings.appearance">外观与语言</h3>
           <p class="card-sub" data-i18n="settings.themeDesc">三套主题各配一种水果意象：赤橙暖橙、青蔗钢灰、碧提青提。桌面程序中「碧提」会让窗口真正半透明，露出桌面壁纸。</p>
@@ -305,7 +312,8 @@
             <select id="font-family-select">
               <option value="system" data-i18n="settings.fontFamilySystem">系统默认</option>
               <option value="yahei" data-i18n="settings.fontFamilyYahei">微软雅黑</option>
-              <option value="mono" data-i18n="settings.fontFamilyMono">等宽科技</option>
+              <option value="songti" data-i18n="settings.fontFamilySongti">宋体</option>
+              <option value="kaiti" data-i18n="settings.fontFamilyKaiti">楷体</option>
             </select>
           </div>
           <div class="field">
@@ -415,7 +423,8 @@
           <h3 data-i18n="settings.about">关于</h3>
           <p class="card-sub">
             CacheSweep · MIT License<br />
-            <span data-i18n="settings.aboutDesc">磁盘体检与安全清理工具，默认只读。以普通用户权限运行，不请求管理员提权。</span>
+            <span data-i18n="settings.aboutDesc">磁盘体检与安全清理工具，默认只读。以普通用户权限运行，不请求管理员提权。</span><br />
+            <span data-i18n="settings.developerLabel">开发者</span>：<strong>君臨天下</strong>
           </p>
 
           <div class="version-row">
