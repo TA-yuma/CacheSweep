@@ -5,9 +5,10 @@
   <trustInfo xmlns="urn:schemas-microsoft-com:asm.v2">
     <security>
       <requestedPrivileges xmlns="urn:schemas-microsoft-com:asm.v3">
-        <!-- Run as the invoking user. CacheSweep only touches the user's own
-             cache directories; elevating would only widen the damage radius. -->
-        <requestedExecutionLevel level="asInvoker" uiAccess="false" />
+        <!-- Elevate to administrator so force-delete can remove apps from
+             Program Files and HKLM registry entries; the safe cache cleaner
+             still only touches its own whitelisted paths. -->
+        <requestedExecutionLevel level="requireAdministrator" uiAccess="false" />
       </requestedPrivileges>
     </security>
   </trustInfo>

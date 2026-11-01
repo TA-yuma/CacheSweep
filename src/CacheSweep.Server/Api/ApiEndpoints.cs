@@ -590,9 +590,6 @@ public static class ApiEndpoints
         {
             Environment.GetFolderPath(Environment.SpecialFolder.Windows),
             Environment.GetFolderPath(Environment.SpecialFolder.System),
-            Environment.GetFolderPath(Environment.SpecialFolder.CommonProgramFiles),
-            Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles),
-            Environment.GetFolderPath(Environment.SpecialFolder.ProgramFilesX86),
         };
 
         foreach (var p in protectedRoots)
