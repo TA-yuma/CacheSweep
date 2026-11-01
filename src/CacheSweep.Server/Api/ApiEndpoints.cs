@@ -678,8 +678,25 @@ public static class ApiEndpoints
             return (0, 0, 0, false);
         }
 
-        // Fast path: one recursive delete. Handles normal folders instantly and
-        // never blocks the UI for a large application directory.
+        // 1) Clear read-only attributes first so the whole-tree delete can succeed.
+        //    This is fast (only changes attributes, never blocks on each file).
+        try
+        {
+            foreach (var f in Directory.EnumerateFiles(path, "*", SearchOption.AllDirectories))
+            {
+                try { File.SetAttributes(f, FileAttributes.Normal); } catch { }
+            }
+            foreach (var d in Directory.EnumerateDirectories(path, "*", SearchOption.AllDirectories))
+            {
+                try { File.SetAttributes(d, FileAttributes.Normal); } catch { }
+            }
+        }
+        catch
+        {
+            // Enumeration failed; fall through.
+        }
+
+        // 2) One-shot recursive delete — deletes a large app folder in seconds.
         try
         {
             Directory.Delete(path, true);
@@ -690,22 +707,14 @@ public static class ApiEndpoints
         }
         catch
         {
-            // Fall through to the per-file pass below.
+            // Fall through to the per-file pass for locked leftovers.
         }
 
-        // Slow path for folders that would not delete wholesale (locks, ACLs).
+        // 3) Handle remaining locked files individually: retry, then schedule
+        //    them for removal at reboot so they never hold the UI hostage.
         try
         {
             var di = new DirectoryInfo(path);
-
-            foreach (var f in di.EnumerateFiles("*", SearchOption.AllDirectories))
-            {
-                try { f.IsReadOnly = false; } catch { }
-            }
-            foreach (var d in di.EnumerateDirectories("*", SearchOption.AllDirectories))
-            {
-                try { d.Attributes = FileAttributes.Normal; } catch { }
-            }
 
             foreach (var f in di.EnumerateFiles("*", SearchOption.AllDirectories))
             {
@@ -726,14 +735,13 @@ public static class ApiEndpoints
                     {
                         if (attempt < 1)
                         {
-                            Thread.Sleep(80);
+                            Thread.Sleep(50);
                         }
                     }
                 }
 
                 if (!deleted)
                 {
-                    // Schedule the locked file for removal at reboot.
                     try { MoveFileEx(f.FullName, null, MoveFileFlags.MOVEFILE_DELAY_UNTIL_REBOOT); } catch { }
                     failed++;
                 }

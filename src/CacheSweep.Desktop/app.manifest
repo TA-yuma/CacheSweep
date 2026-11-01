@@ -5,10 +5,9 @@
   <trustInfo xmlns="urn:schemas-microsoft-com:asm.v2">
     <security>
       <requestedPrivileges xmlns="urn:schemas-microsoft-com:asm.v3">
-        <!-- Elevate to administrator so force-delete can remove apps from
-             Program Files and HKLM registry entries; the safe cache cleaner
-             still only touches its own whitelisted paths. -->
-        <requestedExecutionLevel level="requireAdministrator" uiAccess="false" />
+        <!-- Normal privileges: the fast recursive delete handles user folders,
+             Steam libraries and per-user installs without elevation. -->
+        <requestedExecutionLevel level="asInvoker" uiAccess="false" />
       </requestedPrivileges>
     </security>
   </trustInfo>
