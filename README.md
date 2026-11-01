@@ -243,6 +243,8 @@ CacheSweep
 
 见 [CONTRIBUTING.md](CONTRIBUTING.md)。加一条清理规则通常只需要改 JSON 文件。
 
+投稿、建议与反馈请发送至：**1178111090@qq.com**
+
 ## License
 
 [MIT](LICENSE)

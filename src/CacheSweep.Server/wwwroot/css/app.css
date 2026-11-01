@@ -1629,7 +1629,7 @@ body::after {
 
 /* ---- layout: list ---- */
 
-#apps-list.apps-list-view { display: block; }
+.apps-list-view { display: block; }
 
 .apps-list-view .app-row {
   display: grid;
@@ -1708,13 +1708,13 @@ body::after {
 
 /* The host element (#apps-list) IS the grid container, because the JS renders
    cards straight into it. It must win over the default `display: block`. */
-#apps-list.apps-grid-view {
+.apps-grid-view {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(168px, 1fr));
   gap: 9px;
 }
 
-#apps-list.apps-grid-view .app-card {
+.apps-grid-view .app-card {
   display: flex;
   flex-direction: column;
   gap: 7px;
@@ -1725,22 +1725,22 @@ body::after {
   transition: border-color 0.14s, background 0.14s, transform 0.14s var(--ease);
 }
 
-#apps-list.apps-grid-view .app-card:hover {
+.apps-grid-view .app-card:hover {
   border-color: var(--border-strong);
   background: var(--surface-2);
   transform: translateY(-1px);
 }
 
-#apps-list.apps-grid-view .app-icon,
-#apps-list.apps-grid-view .app-icon-letter {
+.apps-grid-view .app-icon,
+.apps-grid-view .app-icon-letter {
   width: 40px;
   height: 40px;
   border-radius: var(--radius);
 }
 
-#apps-list.apps-grid-view .app-icon-letter { font-size: 1.0625rem; }
+.apps-grid-view .app-icon-letter { font-size: 1.0625rem; }
 
-#apps-list.apps-grid-view .app-name {
+.apps-grid-view .app-name {
   font-size: 0.75rem;
   white-space: normal;
   display: -webkit-box;
@@ -1750,7 +1750,7 @@ body::after {
   min-height: 2.4em;
 }
 
-#apps-list.apps-grid-view .app-size {
+.apps-grid-view .app-size {
   text-align: left;
   font-size: 0.8438rem;
 }
@@ -1789,14 +1789,14 @@ body::after {
 
 /* Shell around the compact list. The host keeps the border; the inner wrapper
    only needs to exist so selectors stay predictable. */
-#apps-list.apps-compact-view {
+.apps-compact-view {
   border: 1px solid var(--border);
   border-radius: var(--radius);
   background: var(--surface-1);
   overflow: hidden;
 }
 
-#apps-list.apps-compact-view > .apps-compact-view {
+.apps-compact-view > .apps-compact-view {
   border: 0;
   border-radius: 0;
   background: transparent;
