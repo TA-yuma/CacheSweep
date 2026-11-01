@@ -23,11 +23,23 @@ internal static class Program
     {
         ApplicationConfiguration.Initialize();
 
+        // A second launch must not pop a "already running" dialog. Instead it
+        // signals the running instance to bring its window to the foreground and
+        // then exits silently — exactly like clicking the taskbar shortcut when
+        // the app is already open (e.g. minimised to the tray).
         using var mutex = new Mutex(true, @"Global\CacheSweep.SingleInstance", out var isFirst);
         if (!isFirst)
         {
-            using var hint = new SecondInstanceForm();
-            hint.ShowDialog();
+            try
+            {
+                using var wake = new EventWaitHandle(false, EventResetMode.AutoReset, @"Global\CacheSweep.Wake");
+                wake.Set();
+            }
+            catch (Exception ex) when (ex is UnauthorizedAccessException or IOException or System.Security.SecurityException)
+            {
+                // Signal creation failed; fall back to doing nothing — the
+                // running instance already owns the app.
+            }
             return;
         }
 
@@ -109,12 +121,16 @@ internal sealed class TrayContext : ApplicationContext
     private AppMode _mode = AppMode.Full;
     private Process? _server;
     private bool _exiting;
+    private readonly SynchronizationContext? _uiCtx;
 
     public TrayContext(int port, string[] args)
     {
         _port = port;
         _url = $"http://127.0.0.1:{port}";
         _startHidden = args.Any(a => a is "--tray" or "/tray" or "--silent");
+        // Captured here (constructor runs on the UI thread) so the wake-listener
+        // thread can marshal window restore back onto the message loop.
+        _uiCtx = SynchronizationContext.Current;
 
         _statusItem = new ToolStripMenuItem("状态：正在启动…") { Enabled = false };
 
@@ -161,6 +177,65 @@ internal sealed class TrayContext : ApplicationContext
 
         StartServer();
         _ = SuperviseAsync();
+        _ = ListenForWakeAsync();
+    }
+
+    /// <summary>
+    /// Listens on the cross-process wake event. A second launch sets it to ask
+    /// this instance to restore its window (from the tray / minimised state).
+    /// UI calls are marshalled back onto the message loop.
+    /// </summary>
+    private async Task ListenForWakeAsync()
+    {
+        EventWaitHandle? wake = null;
+        try
+        {
+            wake = new EventWaitHandle(false, EventResetMode.AutoReset, @"Global\CacheSweep.Wake");
+        }
+        catch (Exception ex) when (ex is UnauthorizedAccessException or IOException or System.Security.SecurityException)
+        {
+            return; // no cross-process wake available; app still works normally
+        }
+
+        try
+        {
+            while (!_stop.IsCancellationRequested)
+            {
+                // Wait on the OS object; it is cheap and does not spin the CPU.
+                var signalled = await Task.Run(() =>
+                {
+                    const int timeoutMs = 1000;
+                    return WaitHandle.WaitAny(new[] { wake, _stop.Token.WaitHandle }, timeoutMs) == 0;
+                }).ConfigureAwait(false);
+
+                if (_stop.IsCancellationRequested)
+                {
+                    return;
+                }
+                if (!signalled || _exiting)
+                {
+                    continue;
+                }
+
+                // Restore the full window on the UI thread.
+                void restore() { if (!_exiting) SetMode(AppMode.Full); }
+                if (_uiCtx is not null)
+                {
+                    _uiCtx.Post(_ => restore(), null);
+                }
+                else
+                {
+                    restore();
+                }
+            }
+        }
+        catch (OperationCanceledException)
+        {
+        }
+        finally
+        {
+            wake?.Dispose();
+        }
     }
 
     /* ---------------- window ---------------- */

@@ -20,6 +20,13 @@ public sealed record PluginDescriptor
     /// <summary>Emoji or single character shown as the plugin glyph.</summary>
     public string Icon { get; init; } = "🧩";
 
+    /// <summary>
+    /// File name (without extension) of a real brand icon under
+    /// /assets/appicons/, used by the UI to render the genuine logo instead of
+    /// an emoji. Empty when no real icon exists.
+    /// </summary>
+    public string IconFile { get; init; } = "";
+
     /// <summary>Process that must be running for the plugin to matter, if any.</summary>
     public string? DetectProcess { get; init; }
 
@@ -54,6 +61,7 @@ public static class PluginCatalog
                 Name = "浏览器清理",
                 Description = "Edge、Chrome、Brave 的网页图片与视频缓存，以及 GPU 渲染缓存",
                 Icon = "🌐",
+                IconFile = "chrome",
                 DetectProcess = "msedge",
                 Rules = new[]
                 {
@@ -89,6 +97,7 @@ public static class PluginCatalog
                 Name = "微信清理",
                 Description = "微信的图片、视频与文件缓存。不会删除聊天记录本身",
                 Icon = "💬",
+                IconFile = "wechat",
                 DetectPath = @"%USERPROFILE%\Documents\WeChat Files",
                 Rules = new[]
                 {
@@ -110,6 +119,7 @@ public static class PluginCatalog
                 Name = "QQ 清理",
                 Description = "QQ 的图片、视频与语音缓存",
                 Icon = "🐧",
+                IconFile = "qq",
                 DetectPath = @"%USERPROFILE%\Documents\Tencent Files",
                 Rules = new[]
                 {
@@ -131,6 +141,7 @@ public static class PluginCatalog
                 Name = "开发者缓存",
                 Description = "npm、pip、NuGet、VS Code 的包缓存与编译缓存",
                 Icon = "⚙️",
+                IconFile = "github",
                 Rules = new[]
                 {
                     Rule("plugin-dev-npm", "npm 缓存",
@@ -157,6 +168,7 @@ public static class PluginCatalog
                 Name = "游戏与显卡缓存",
                 Description = "NVIDIA 着色器缓存与 DirectX 着色器缓存",
                 Icon = "🎮",
+                IconFile = "steam",
                 Rules = new[]
                 {
                     Rule("plugin-game-nvidia", "NVIDIA 着色器缓存",

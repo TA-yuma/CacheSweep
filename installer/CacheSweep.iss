@@ -4,7 +4,7 @@
 ; 自动创建开始菜单和桌面快捷方式，可选开机自启（由应用内设置控制）。
 
 #define MyAppName "CacheSweep"
-#define MyAppVersion "1.0.2"
+#define MyAppVersion "1.0.3"
 #define MyAppPublisher "君臨天下"
 #define MyAppExeName "CacheSweep.exe"
 #define MyAppAssocName MyAppName + " 设置"
@@ -42,8 +42,8 @@ RestartApplications=no
 
 [Languages]
 ; 安装器界面语言。应用本身内置中英俄三语，安装后在设置里切换。
+Name: "chinesesimp"; MessagesFile: "compiler:Languages\ChineseSimplified.isl"
 Name: "english"; MessagesFile: "compiler:Default.isl"
-Name: "russian"; MessagesFile: "compiler:Languages\Russian.isl"
 
 [Tasks]
 Name: "desktopicon"; Description: "在桌面创建快捷方式"; GroupDescription: "附加任务："; Flags: checkedonce

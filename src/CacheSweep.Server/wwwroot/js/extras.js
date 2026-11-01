@@ -50,7 +50,28 @@ function renderPlugins() {
 
     const icon = document.createElement("div");
     icon.className = "plugin-icon";
-    icon.textContent = plugin.icon || "🧩";
+
+    // Real brand icon when the plugin maps one (SVG or PNG under /assets/appicons);
+    // otherwise fall back to the emoji glyph.
+    if (plugin.iconFile) {
+      const img = document.createElement("img");
+      img.className = "plugin-icon-logo";
+      img.src = `/assets/appicons/${encodeURIComponent(plugin.iconFile)}.svg`;
+      img.alt = "";
+      img.onerror = () => {
+        if (!img.dataset.pngTried) {
+          // Some icons (e.g. QQ, extracted from the real app) ship as PNG.
+          img.dataset.pngTried = "1";
+          img.src = `/assets/appicons/${encodeURIComponent(plugin.iconFile)}.png`;
+        } else {
+          icon.textContent = plugin.icon || "🧩";
+          img.remove();
+        }
+      };
+      icon.appendChild(img);
+    } else {
+      icon.textContent = plugin.icon || "🧩";
+    }
 
     const titles = document.createElement("div");
     titles.innerHTML =

@@ -834,12 +834,22 @@ main {
 /* The software-intro card spans the full row at the top of settings. */
 .card-full { grid-column: 1 / -1; }
 
-.card {
-  padding: 15px;
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  background: var(--surface-1);
-  box-shadow: var(--shadow-panel);
+/* The About card's full description: a compact scrollable window so the card
+   stays roughly the same height as before; the whole text is still available
+   by scrolling. */
+.about-scroll {
+  max-height: 170px;
+  overflow-y: auto;
+  padding-right: 8px;
+  margin-bottom: 12px;
+}
+
+.about-scroll .card-sub {
+  white-space: pre-line;
+  line-height: 1.75;
+  font-size: 0.75rem;
+  color: var(--text-dim);
+  margin-bottom: 0;
 }
 
 [data-theme="transparent"] .card { border-color: var(--border-strong); }
@@ -1824,6 +1834,14 @@ body::after {
   background: var(--surface-3);
   border: 1px solid var(--hairline);
   flex: none;
+  overflow: hidden;
+}
+
+/* Real brand icon (SVG) inside the plugin chip. */
+.plugin-icon-logo {
+  width: 22px;
+  height: 22px;
+  display: block;
 }
 
 .plugin-name {
@@ -2243,14 +2261,31 @@ html.no-feedback .is-pressing { transform: none; filter: none; }
 .boot-brand {
   position: relative;
   z-index: 1;
-  font-size: 1.6rem;
-  font-weight: 800;
-  letter-spacing: 4px;
-  text-transform: uppercase;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
   color: var(--text);
   opacity: 0;
-  transform: translateY(8px);
-  transition: opacity 0.5s ease, transform 0.5s ease;
+  transform: translateY(10px);
+  transition: opacity 0.55s ease, transform 0.55s ease;
+  /* keep the text steady once shown: no blur, no shake */
+}
+
+.boot-brand-name {
+  font-size: 1.75rem;
+  font-weight: 800;
+  letter-spacing: 5px;
+  text-transform: uppercase;
+  line-height: 1;
+}
+
+.boot-brand-tag {
+  font-size: 0.72rem;
+  font-weight: 500;
+  letter-spacing: 3px;
+  text-transform: uppercase;
+  color: var(--text-faint);
 }
 
 .boot-brand.boot-brand-show {
