@@ -478,8 +478,8 @@ function updateProgress(evt) {
     const amount = document.createElement("span");
     amount.className = "amount";
     amount.textContent = evt.currentSuccess
-      ? formatBytes(evt.currentBytes || 0)
-      : evt.currentError || t("status.failed");
+      ? `${t("status.success")}，${t("progress.freed")} ${formatBytes(evt.currentBytes || 0)}`
+      : `${t("status.failed")}：${evt.currentError || t("status.failed")}`;
 
     line.append(mark, name, amount);
     const log = $("progress-log");
@@ -592,8 +592,11 @@ async function runClean(ids, dryRun) {
     const lines = result.items
       .map(
         (i) =>
-          `<li>${i.success ? "✓" : "✗"} ${i.name} — ${formatBytes(i.freedBytes)}` +
-          `${i.error ? ` <span style="color:var(--caution)">（${i.error}）</span>` : ""}</li>`
+          `<li>${i.success ? "✓" : "✗"} ${i.name} — ` +
+          (i.success
+            ? `${t("status.success")}，${t("progress.freed")} ${formatBytes(i.freedBytes)}`
+            : `${t("status.failed")}：${i.error || t("status.failed")}`) +
+          `</li>`
       )
       .join("");
 

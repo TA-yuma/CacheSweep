@@ -133,6 +133,50 @@
         <button id="btn-clean" class="btn danger sm" disabled data-i18n="action.clean">执行清理</button>
       </section>
 
+      <!-- Live clean progress: an inline panel above the list, not a floating modal
+         so it never covers the scan results. -->
+      <section class="progress-panel" id="progress-modal" hidden>
+        <div class="modal-box progress-box" role="region" aria-labelledby="progress-title">
+          <h2 id="progress-title" data-i18n="progress.title.clean">正在清理</h2>
+
+          <div class="progress-current">
+            <span class="progress-dot" id="progress-dot"></span>
+            <span id="progress-current-name" data-i18n="progress.preparing">准备中…</span>
+          </div>
+
+          <div class="progress-track" role="progressbar" aria-valuemin="0" aria-valuemax="100"
+               aria-valuenow="0" id="progress-track">
+            <div class="progress-fill" id="progress-fill" style="width:0%"></div>
+          </div>
+
+          <div class="progress-meta">
+            <span id="progress-percent">0%</span>
+            <span id="progress-count">0 / 0</span>
+          </div>
+
+          <div class="progress-stats">
+            <div class="progress-stat">
+              <span class="progress-stat-label" data-i18n="progress.freed">已释放</span>
+              <span class="progress-stat-value" id="progress-freed">0 B</span>
+            </div>
+            <div class="progress-stat">
+              <span class="progress-stat-label" data-i18n="progress.files">已处理文件</span>
+              <span class="progress-stat-value" id="progress-files">0</span>
+            </div>
+            <div class="progress-stat">
+              <span class="progress-stat-label" data-i18n="progress.failures">失败</span>
+              <span class="progress-stat-value" id="progress-failures">0</span>
+            </div>
+          </div>
+
+          <div class="progress-log" id="progress-log"></div>
+
+          <div class="modal-actions">
+            <button id="progress-close" class="btn primary" hidden data-i18n="action.done">完成</button>
+          </div>
+        </div>
+      </section>
+
       <section class="list" id="list"></section>
 
       <section class="empty" id="empty">
@@ -487,50 +531,6 @@
       <div class="modal-actions">
         <button id="modal-cancel" class="btn ghost" data-i18n="action.cancel">取消</button>
         <button id="modal-ok" class="btn danger" data-i18n="action.confirm">确认执行</button>
-      </div>
-    </div>
-  </div>
-
-  <!-- Live clean progress. Deterministic bar driven by server-sent events, so
-       the user can always tell work is happening and how far along it is. -->
-  <div class="modal" id="progress-modal" hidden>
-    <div class="modal-box progress-box" role="dialog" aria-modal="true" aria-labelledby="progress-title">
-      <h2 id="progress-title" data-i18n="progress.title.clean">正在清理</h2>
-
-      <div class="progress-current">
-        <span class="progress-dot" id="progress-dot"></span>
-        <span id="progress-current-name" data-i18n="progress.preparing">准备中…</span>
-      </div>
-
-      <div class="progress-track" role="progressbar" aria-valuemin="0" aria-valuemax="100"
-           aria-valuenow="0" id="progress-track">
-        <div class="progress-fill" id="progress-fill" style="width:0%"></div>
-      </div>
-
-      <div class="progress-meta">
-        <span id="progress-percent">0%</span>
-        <span id="progress-count">0 / 0</span>
-      </div>
-
-      <div class="progress-stats">
-        <div class="progress-stat">
-          <span class="progress-stat-label" data-i18n="progress.freed">已释放</span>
-          <span class="progress-stat-value" id="progress-freed">0 B</span>
-        </div>
-        <div class="progress-stat">
-          <span class="progress-stat-label" data-i18n="progress.files">已处理文件</span>
-          <span class="progress-stat-value" id="progress-files">0</span>
-        </div>
-        <div class="progress-stat">
-          <span class="progress-stat-label" data-i18n="progress.failures">失败</span>
-          <span class="progress-stat-value" id="progress-failures">0</span>
-        </div>
-      </div>
-
-      <div class="progress-log" id="progress-log"></div>
-
-      <div class="modal-actions">
-        <button id="progress-close" class="btn primary" hidden data-i18n="action.done">完成</button>
       </div>
     </div>
   </div>
