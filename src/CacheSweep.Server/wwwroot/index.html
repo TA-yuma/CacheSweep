@@ -519,24 +519,39 @@
 
     <!-- ============ view: force (brute-force removal) ============ -->
     <section class="view" id="view-force" hidden>
-      <div class="card card-full">
-        <h3 data-i18n="force.title">暴力清除</h3>
-        <p class="card-sub" data-i18n="force.subtitle">危险操作：关闭占用进程并强制删除指定目录。此操作不可恢复，执行前需多重确认。</p>
-
-        <div class="field">
-          <label data-i18n="force.pathLabel">要删除的应用/目录路径</label>
-          <input type="text" id="force-path" data-i18n-placeholder="force.pathPlaceholder" placeholder="例如 D:\Program Files\某应用" />
+      <div class="inv-head">
+        <h2 data-i18n="force.title">暴力清除</h2>
+        <span class="muted" data-i18n="force.subtitle">勾选要删除的软件，删除时会关闭其进程并强制清空整个文件夹，需多重确认</span>
+        <span class="spacer"></span>
+        <button id="force-refresh" class="btn ghost sm" data-i18n="action.refresh">刷新</button>
+        <div class="view-switch" id="force-view-switch" role="group" data-i18n-aria="force.title" aria-label="查看方式">
+          <button type="button" data-view="list" class="active" title="列表" aria-label="列表">☰</button>
+          <button type="button" data-view="grid" title="卡片" aria-label="卡片">▦</button>
+          <button type="button" data-view="compact" title="紧凑" aria-label="紧凑">≡</button>
         </div>
-
-        <div class="field">
-          <label data-i18n="force.confirmLabel">输入目录名以确认</label>
-          <input type="text" id="force-confirm" data-i18n-placeholder="force.confirmPlaceholder" placeholder="输入目录名" />
-        </div>
-
-        <button id="btn-force-delete" class="btn danger" data-i18n="force.btn">暴力删除</button>
-
-        <div id="force-result" class="muted" style="margin-top:10px;font-size:0.75rem"></div>
       </div>
+
+      <div class="toolbar" id="force-toolbar" hidden>
+        <label class="chk"><input type="checkbox" id="force-select-all" /> <span data-i18n="action.selectAll">全选</span></label>
+        <span class="muted" id="force-selected-count">已选 0 项</span>
+        <span class="spacer"></span>
+        <button id="btn-force-delete" class="btn danger sm" disabled data-i18n="force.btn">暴力删除所选</button>
+      </div>
+
+      <div class="list" id="force-list"></div>
+      <div class="empty" id="force-empty" hidden>
+        <p data-i18n="force.emptyHint">点击「刷新」加载本机已安装的软件</p>
+      </div>
+
+      <div class="card" style="margin-top:14px">
+        <label data-i18n="force.pathLabel">或手动输入要删除的路径（可选）</label>
+        <div style="display:flex;gap:8px;margin-top:6px">
+          <input type="text" id="force-path" data-i18n-placeholder="force.pathPlaceholder" placeholder="例如 D:\Program Files\某应用" style="flex:1" />
+          <button id="btn-force-delete-path" class="btn danger sm" data-i18n="force.btnPath">删除此路径</button>
+        </div>
+      </div>
+
+      <div id="force-result" class="muted" style="margin-top:10px;font-size:0.75rem"></div>
     </section>
   </main>
 

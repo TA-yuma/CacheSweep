@@ -1205,43 +1205,144 @@ $("tab-sweep").addEventListener("click", () => showView("sweep"));
 $("tab-disk").addEventListener("click", () => showView("disk"));
 $("tab-rules").addEventListener("click", () => showView("rules"));
 $("tab-settings").addEventListener("click", () => showView("settings"));
-$("tab-force").addEventListener("click", () => showView("force"));
+$("tab-force").addEventListener("click", () => {
+  showView("force");
+  if (!forceApps.length) loadForceApps();
+});
 
 /* ---------------- brute-force removal ---------------- */
 
-$("btn-force-delete").addEventListener("click", startForceDelete);
+let forceApps = [];
+let forceView = "list";
+const forceSelected = new Set();
 
-function startForceDelete() {
+$("force-refresh").addEventListener("click", loadForceApps);
+$("btn-force-delete").addEventListener("click", startForceDeleteSelected);
+$("btn-force-delete-path").addEventListener("click", () => {
   const path = ($("force-path").value || "").trim();
-  if (!path) {
-    showBanner("warn", t("force.needPath"));
-    return;
-  }
-  const dirName = path.split(/[\\/]+/).filter(Boolean).pop() || path;
+  if (!path) { showBanner("warn", t("force.needPath")); return; }
+  confirmForceDelete([path]);
+});
 
-  // Step 1: explicit warning.
+document.querySelectorAll("#force-view-switch button").forEach((b) => {
+  b.addEventListener("click", () => {
+    forceView = b.dataset.view;
+    document.querySelectorAll("#force-view-switch button").forEach((x) => x.classList.toggle("active", x === b));
+    renderForceApps();
+  });
+});
+
+$("force-select-all").addEventListener("change", (e) => {
+  if (e.target.checked) forceApps.forEach((a) => forceSelected.add(a.installLocation));
+  else forceSelected.clear();
+  renderForceApps();
+});
+
+async function loadForceApps() {
+  $("force-list").innerHTML = "";
+  try {
+    const data = await api("/api/inventory/apps");
+    forceApps = (data.apps || []).filter((a) => a.installLocation);
+    forceSelected.clear();
+    renderForceApps();
+  } catch (err) {
+    showBanner("error", `${t("force.failed")}：${err.message}`);
+  }
+}
+
+function renderForceApps() {
+  const host = $("force-list");
+  const apps = forceApps || [];
+  host.className = `apps-${forceView}-view`;
+  host.innerHTML = "";
+  $("force-empty").hidden = apps.length > 0;
+  $("force-toolbar").hidden = apps.length === 0;
+  updateForceSelectionUi();
+
+  for (const app of apps) {
+    const el = document.createElement("label");
+    el.className = forceView === "grid" ? "app-card force-item" : forceView === "compact" ? "app-line force-item" : "app-row force-item";
+    el.title = app.installLocation;
+
+    const chk = document.createElement("input");
+    chk.type = "checkbox";
+    chk.className = "force-chk";
+    chk.checked = forceSelected.has(app.installLocation);
+    chk.addEventListener("change", () => {
+      if (chk.checked) forceSelected.add(app.installLocation);
+      else forceSelected.delete(app.installLocation);
+      updateForceSelectionUi();
+    });
+
+    const name = document.createElement("div");
+    name.className = "app-name";
+    name.textContent = app.name;
+
+    if (forceView === "list") {
+      const main = document.createElement("div");
+      main.className = "app-main";
+      const sub = document.createElement("div");
+      sub.className = "app-sub";
+      sub.textContent = app.installLocation;
+      sub.title = app.installLocation;
+      main.append(name, sub);
+      const size = document.createElement("div");
+      size.className = "app-size";
+      size.textContent = formatBytes(app.bytes);
+      el.append(chk, appIconEl(app), main, size);
+    } else {
+      const size = document.createElement("div");
+      size.className = "app-size";
+      size.textContent = formatBytes(app.bytes);
+      el.append(chk, appIconEl(app), name, size);
+    }
+
+    host.appendChild(el);
+  }
+}
+
+function updateForceSelectionUi() {
+  const n = forceSelected.size;
+  $("force-selected-count").textContent = `已选 ${n} ${t("unit.items")}`;
+  $("btn-force-delete").disabled = n === 0;
+  $("btn-force-delete").textContent = n === 0 ? t("force.btn") : `${t("force.btn")} (${n})`;
+  $("force-select-all").checked = forceApps.length > 0 && n === forceApps.length;
+}
+
+function startForceDeleteSelected() {
+  const paths = [...forceSelected];
+  if (!paths.length) { showBanner("warn", t("force.needPath")); return; }
+  confirmForceDelete(paths);
+}
+
+function confirmForceDelete(paths) {
+  const count = paths.length;
+  const firstName = paths[0].split(/[\\/]+/).filter(Boolean).pop() || paths[0];
+  const confirmWord = count === 1 ? firstName : String(count);
+  const listHtml = paths.map((p) => `<li style="margin:2px 0">${escapeHtml(p)}</li>`).join("");
+
+  // Step 1: warning.
   openModal(
     t("force.warning"),
-    `<p>${t("force.warnBody1")}</p>` +
-      `<p><strong>${escapeHtml(path)}</strong></p>` +
+    `<p>${t("force.warnBody1")}（${count} ${t("unit.items")}）</p>` +
+      `<ul style="max-height:130px;overflow:auto;font-size:0.8125rem">${listHtml}</ul>` +
       `<p style="color:var(--danger)">${t("force.warnBody2")}</p>`,
     () => {
-      // Step 2: type the directory name to prove intent.
+      // Step 2: type the folder name (or the count) to prove intent.
       openModal(
         t("force.typeConfirm"),
-        `<p>${t("force.typeConfirmBody")}：<strong>${escapeHtml(dirName)}</strong></p>` +
-          `<input id="force-type-input" type="text" class="field" style="width:100%" placeholder="${escapeHtml(dirName)}" />`,
+        `<p>${t("force.typeConfirmBody")}：<strong>${escapeHtml(confirmWord)}</strong></p>` +
+          `<input id="force-type-input" type="text" class="field" style="width:100%" />`,
         () => {
           const typed = (($("force-type-input")?.value) || "").trim();
-          if (typed !== dirName) {
+          if (typed !== confirmWord) {
             showBanner("error", t("force.confirmMismatch"));
             return;
           }
-          // Step 3: final, non-revocable confirmation.
           openModal(
             t("force.finalConfirm"),
             `<p style="color:var(--danger);font-weight:800">${t("force.finalBody")}</p>`,
-            () => doForceDelete(path),
+            () => doForceDeleteMany(paths),
             t("force.doDelete")
           );
         },
@@ -1252,32 +1353,37 @@ function startForceDelete() {
   );
 }
 
-async function doForceDelete(path) {
+async function doForceDeleteMany(paths) {
   setStatus(t("force.deleting"), true);
   $("force-result").textContent = "";
-  try {
-    const res = await fetch("/api/force/delete", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ path }),
-    });
-    const data = await res.json();
-    if (!res.ok) {
-      throw new Error(data?.error || `HTTP ${res.status}`);
+  let done = 0;
+  let failed = 0;
+  for (const path of paths) {
+    try {
+      const res = await fetch("/api/force/delete", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ path }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        failed++;
+        $("force-result").textContent += `✗ ${path}：${data?.error || `HTTP ${res.status}`}\n`;
+      } else {
+        done++;
+        $("force-result").textContent += `✓ ${path}：${t("force.done")}\n`;
+      }
+    } catch (err) {
+      failed++;
+      $("force-result").textContent += `✗ ${path}：${err.message}\n`;
     }
-    const killed = data.killedProcesses?.length || 0;
-    showBanner(
-      "ok",
-      `${t("force.done")}：${t("clean.freed")} ${formatBytes(data.freedBytes || 0)}，` +
-        `${t("clean.involving")} ${(data.deletedFiles || 0).toLocaleString("zh-CN")} ${t("unit.files")}，` +
-        `${t("force.killed")} ${killed} ${t("unit.processes")}`
-    );
-    $("force-result").textContent = `${t("force.done")}：${path}`;
-  } catch (err) {
-    showBanner("error", `${t("force.failed")}：${err.message}`);
-  } finally {
-    setStatus("");
   }
+  showBanner(
+    failed ? "warn" : "ok",
+    `${t("force.done")}：${done} ${t("unit.items")}${failed ? `，${t("force.failed")} ${failed} ${t("unit.items")}` : ""}`
+  );
+  await loadForceApps();
+  setStatus("");
 }
 
 /* Theme names. Each theme is named after the fruit whose colour it carries. */

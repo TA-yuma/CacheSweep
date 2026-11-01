@@ -2308,3 +2308,23 @@ html.no-feedback .is-pressing { transform: none; filter: none; }
   opacity: 0;
   transform: translateY(-4px);
 }
+
+/* Brute-force removal: clickable rows with a checkbox. */
+.force-item {
+  cursor: pointer;
+  user-select: none;
+}
+
+.force-chk {
+  flex: none;
+  width: 16px;
+  height: 16px;
+  margin-right: 10px;
+  accent-color: var(--danger);
+  cursor: pointer;
+}
+
+.force-item .app-icon,
+.force-item .app-icon-letter {
+  flex: none;
+}
