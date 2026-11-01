@@ -96,6 +96,11 @@
 
     <!-- ============ view: sweep ============ -->
     <section class="view" id="view-sweep">
+      <div class="sweep-mode" id="sweep-mode" role="group" aria-label="清理类型">
+        <button type="button" id="sweep-mode-cache" class="active" data-i18n="sweep.modeCache">清理缓存</button>
+        <button type="button" id="sweep-mode-app" data-i18n="sweep.modeApp">删除应用</button>
+      </div>
+
       <section class="summary" id="summary" hidden>
         <div class="stat stat-total">
           <span class="stat-label" data-i18n="summary.total">可清理总计</span>
@@ -194,6 +199,17 @@
         <p data-i18n="sweep.emptyTitle">点击「开始体检」扫描本机缓存占用</p>
         <p class="hint" data-i18n="sweep.emptyHint">扫描完全只读，不会删除任何文件</p>
       </section>
+
+      <!-- 应用模式：勾选删除已安装软件，复用暴力删除能力 -->
+      <div class="sweep-app-panel" id="sweep-app-panel" hidden>
+        <div class="toolbar">
+          <label class="chk"><input type="checkbox" id="sweep-app-select-all" /> <span data-i18n="action.selectAll">全选</span></label>
+          <span class="muted" id="sweep-app-count">已选 0 项</span>
+          <span class="spacer"></span>
+          <button id="sweep-app-delete" class="btn danger sm" disabled data-i18n="force.btn">暴力删除所选</button>
+        </div>
+        <div class="list" id="sweep-app-list"></div>
+      </div>
     </section>
 
     <!-- ============ view: disk usage ============ -->

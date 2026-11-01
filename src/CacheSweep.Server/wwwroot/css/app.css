@@ -2331,6 +2331,53 @@ html.no-feedback .is-pressing { transform: none; filter: none; }
   cursor: pointer;
 }
 
+.force-del-btn {
+  flex: none;
+  margin-left: auto;
+  padding: 4px 12px;
+  border: 1px solid var(--danger);
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--danger);
+  font-size: 0.6875rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.12s, color 0.12s;
+}
+
+.force-del-btn:hover {
+  background: var(--danger);
+  color: #fff;
+}
+
+/* Cache / App mode switch at the top of the sweep view. */
+.sweep-mode {
+  display: inline-flex;
+  gap: 6px;
+  margin-bottom: 14px;
+  padding: 3px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface-1);
+}
+
+.sweep-mode button {
+  padding: 7px 18px;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--text-dim);
+  font-size: 0.8125rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.12s, color 0.12s;
+}
+
+.sweep-mode button.active {
+  background: var(--accent);
+  color: #fff;
+}
+
 .force-item .app-icon,
 .force-item .app-icon-letter {
   flex: none;

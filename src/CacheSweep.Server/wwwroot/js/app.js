@@ -1278,6 +1278,17 @@ function renderForceApps() {
     name.className = "app-name";
     name.textContent = app.name;
 
+    // Per-app delete button: one click removes this app directly.
+    const delBtn = document.createElement("button");
+    delBtn.type = "button";
+    delBtn.className = "force-del-btn";
+    delBtn.textContent = t("force.doDelete");
+    delBtn.addEventListener("click", (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      confirmForceDelete([app.installLocation]);
+    });
+
     if (forceView === "list") {
       const main = document.createElement("div");
       main.className = "app-main";
@@ -1289,12 +1300,12 @@ function renderForceApps() {
       const size = document.createElement("div");
       size.className = "app-size";
       size.textContent = formatBytes(app.bytes);
-      el.append(chk, appIconEl(app), main, size);
+      el.append(chk, appIconEl(app), main, size, delBtn);
     } else {
       const size = document.createElement("div");
       size.className = "app-size";
       size.textContent = formatBytes(app.bytes);
-      el.append(chk, appIconEl(app), name, size);
+      el.append(chk, appIconEl(app), name, size, delBtn);
     }
 
     host.appendChild(el);
@@ -1420,6 +1431,116 @@ async function doForceDeleteMany(paths) {
     `${t("force.done")}：${done} ${t("unit.items")}${failed ? `，${t("force.failed")} ${failed} ${t("unit.items")}` : ""}`
   );
   await loadForceApps();
+  if (sweepApps.length) await loadSweepApps();
+}
+
+/* ---------------- sweep mode: 缓存 / 应用 ---------------- */
+
+let sweepMode = "cache";
+let sweepApps = [];
+const sweepSelected = new Set();
+
+$("sweep-mode-cache").addEventListener("click", () => setSweepMode("cache"));
+$("sweep-mode-app").addEventListener("click", () => setSweepMode("app"));
+$("sweep-app-select-all").addEventListener("change", (e) => {
+  if (e.target.checked) sweepApps.forEach((a) => sweepSelected.add(a.installLocation));
+  else sweepSelected.clear();
+  renderSweepApps();
+});
+$("sweep-app-delete").addEventListener("click", () => {
+  const paths = [...sweepSelected];
+  if (!paths.length) return;
+  confirmForceDelete(paths);
+});
+
+function setSweepMode(mode) {
+  sweepMode = mode;
+  const isApp = mode === "app";
+  $("sweep-mode-cache").classList.toggle("active", !isApp);
+  $("sweep-mode-app").classList.toggle("active", isApp);
+  $("sweep-app-panel").hidden = !isApp;
+
+  // In app mode hide the cache scan UI; restore it when returning to cache mode.
+  for (const id of ["summary", "toolbar", "list", "empty", "progress-modal"]) {
+    const el = $(id);
+    if (!el) continue;
+    if (isApp) {
+      el.dataset.prevHidden = String(el.hidden);
+      el.hidden = true;
+    } else {
+      el.hidden = el.dataset.prevHidden === "true";
+    }
+  }
+
+  if (isApp) {
+    if (!sweepApps.length) loadSweepApps();
+    else renderSweepApps();
+  }
+}
+
+async function loadSweepApps() {
+  try {
+    const data = await api("/api/inventory/apps");
+    sweepApps = (data.apps || []).filter((a) => a.installLocation);
+    sweepSelected.clear();
+    renderSweepApps();
+  } catch (err) {
+    showBanner("error", `${t("force.failed")}：${err.message}`);
+  }
+}
+
+function renderSweepApps() {
+  const host = $("sweep-app-list");
+  host.innerHTML = "";
+  const n = sweepSelected.size;
+  $("sweep-app-count").textContent = `已选 ${n} ${t("unit.items")}`;
+  $("sweep-app-delete").disabled = n === 0;
+  $("sweep-app-delete").textContent = n === 0 ? t("force.btn") : `${t("force.btn")} (${n})`;
+  $("sweep-app-select-all").checked = sweepApps.length > 0 && n === sweepApps.length;
+
+  for (const app of sweepApps) {
+    const row = document.createElement("label");
+    row.className = "app-row force-item";
+    row.title = app.installLocation;
+
+    const chk = document.createElement("input");
+    chk.type = "checkbox";
+    chk.className = "force-chk";
+    chk.checked = sweepSelected.has(app.installLocation);
+    chk.addEventListener("change", () => {
+      if (chk.checked) sweepSelected.add(app.installLocation);
+      else sweepSelected.delete(app.installLocation);
+      renderSweepApps();
+    });
+
+    const name = document.createElement("div");
+    name.className = "app-name";
+    name.textContent = app.name;
+
+    const main = document.createElement("div");
+    main.className = "app-main";
+    const sub = document.createElement("div");
+    sub.className = "app-sub";
+    sub.textContent = app.installLocation;
+    main.append(name, sub);
+
+    const size = document.createElement("div");
+    size.className = "app-size";
+    size.textContent = formatBytes(app.bytes);
+
+    const delBtn = document.createElement("button");
+    delBtn.type = "button";
+    delBtn.className = "force-del-btn";
+    delBtn.textContent = t("force.doDelete");
+    delBtn.addEventListener("click", (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      confirmForceDelete([app.installLocation]);
+    });
+
+    row.append(chk, appIconEl(app), main, size, delBtn);
+    host.appendChild(row);
+  }
 }
 
 /* Theme names. Each theme is named after the fruit whose colour it carries. */
