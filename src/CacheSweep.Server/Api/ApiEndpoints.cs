@@ -555,7 +555,11 @@ public static class ApiEndpoints
             }
 
             var killed = KillProcessesUnder(full);
-            var (files, bytes) = ForceDelete(full);
+
+            // Let killed processes release their file handles before deleting.
+            Thread.Sleep(800);
+
+            var (files, bytes, failed, remains) = ForceDelete(full);
 
             return Results.Ok(new
             {
@@ -563,6 +567,8 @@ public static class ApiEndpoints
                 killedProcesses = killed,
                 deletedFiles = files,
                 freedBytes = bytes,
+                failedFiles = failed,
+                remains = remains,
             });
         });
     }
@@ -630,83 +636,77 @@ public static class ApiEndpoints
         return killed;
     }
 
-    private static (long Files, long Bytes) ForceDelete(string path)
+    private static (long Files, long Bytes, long Failed, bool Remains) ForceDelete(string path)
     {
         long files = 0;
         long bytes = 0;
+        long failed = 0;
 
         if (File.Exists(path))
         {
-            var fi = new FileInfo(path);
-            fi.Attributes = FileAttributes.Normal;
-            bytes = fi.Length;
-            File.Delete(path);
-            return (1, bytes);
+            try
+            {
+                var fi = new FileInfo(path);
+                fi.IsReadOnly = false;
+                bytes = fi.Length;
+                File.Delete(path);
+                return (1, bytes, 0, File.Exists(path));
+            }
+            catch
+            {
+                return (0, 0, 1, true);
+            }
         }
 
         if (!Directory.Exists(path))
         {
-            return (0, 0);
+            return (0, 0, 0, false);
         }
 
         try
         {
             var di = new DirectoryInfo(path);
 
+            // Strip read-only everywhere first, so nothing blocks the delete.
+            foreach (var f in di.EnumerateFiles("*", SearchOption.AllDirectories))
+            {
+                try { f.IsReadOnly = false; } catch { }
+            }
+            foreach (var d in di.EnumerateDirectories("*", SearchOption.AllDirectories))
+            {
+                try { d.Attributes = FileAttributes.Normal; } catch { }
+            }
+
+            // Delete files; count failures instead of silently ignoring them.
             foreach (var f in di.EnumerateFiles("*", SearchOption.AllDirectories))
             {
                 try
                 {
-                    f.Attributes = FileAttributes.Normal;
                     bytes += f.Length;
                     f.Delete();
                     files++;
                 }
                 catch
                 {
-                    try
-                    {
-                        f.Attributes = FileAttributes.Normal;
-                        f.Delete();
-                        bytes += f.Length;
-                        files++;
-                    }
-                    catch
-                    {
-                        // Locked by another process; best-effort.
-                    }
+                    failed++;
                 }
             }
 
+            // Delete now-empty directories deepest-first, then the root.
             foreach (var d in di.EnumerateDirectories("*", SearchOption.AllDirectories)
                                  .OrderByDescending(x => x.FullName.Length))
             {
-                try
-                {
-                    d.Attributes = FileAttributes.Normal;
-                    d.Delete(recursive: true);
-                }
-                catch
-                {
-                    // Best-effort.
-                }
+                try { d.Delete(false); } catch { }
             }
+            try { di.Delete(false); } catch { }
 
-            try
-            {
-                di.Delete(recursive: true);
-            }
-            catch
-            {
-                // The root may still be locked; it clears on next launch.
-            }
+            var remains = Directory.Exists(path);
+            return (files, bytes, failed, remains);
         }
         catch
         {
-            // The top-level directory may have vanished.
+            return (files, bytes, failed, Directory.Exists(path));
         }
-
-        return (files, bytes);
     }
 }
 

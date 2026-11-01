@@ -1397,9 +1397,16 @@ async function doForceDeleteMany(paths) {
         body: JSON.stringify({ path }),
       });
       const data = await res.json();
-      if (!res.ok) {
+      // A folder only counts as deleted when it is actually gone from disk.
+      const trulyDeleted = res.ok && !data.remains && (data.failedFiles || 0) === 0;
+      if (!trulyDeleted) {
         failed++;
-        li.textContent = `✗ ${name}：${data?.error || `HTTP ${res.status}`}`;
+        const reason = !res.ok
+          ? (data?.error || `HTTP ${res.status}`)
+          : data.remains
+            ? `仍有 ${data.failedFiles || 0} 个文件未删除（可能被占用或需要权限）`
+            : `部分失败`;
+        li.textContent = `✗ ${name}：${reason}`;
         li.style.color = "var(--danger)";
         if (el) { el.classList.remove("force-deleting"); el.classList.add("force-failed"); }
       } else {
