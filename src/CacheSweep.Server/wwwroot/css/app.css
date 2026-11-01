@@ -2369,3 +2369,95 @@ html.no-feedback .is-pressing { transform: none; filter: none; }
   animation: forceShake 0.35s ease-in-out 2;
   border-color: var(--caution) !important;
 }
+
+/* Centred force-delete popup: spins while deleting, lists each item live. */
+.force-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 300;
+  background: rgba(4, 6, 9, 0.72);
+  backdrop-filter: blur(5px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+}
+
+.force-dialog {
+  width: min(440px, 100%);
+  padding: 24px 22px;
+  border: 1px solid var(--border-strong);
+  border-top: 2px solid var(--danger);
+  border-radius: var(--radius);
+  background: var(--surface-1);
+  box-shadow: var(--shadow-3);
+  text-align: center;
+  animation: forcePop 0.22s cubic-bezier(0.2, 0.9, 0.3, 1.15);
+}
+
+@keyframes forcePop {
+  from { opacity: 0; transform: translateY(10px) scale(0.94); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+.force-spinner {
+  width: 46px;
+  height: 46px;
+  margin: 0 auto 14px;
+  border: 3px solid var(--border);
+  border-top-color: var(--danger);
+  border-radius: 50%;
+  animation: forceSpin 0.8s linear infinite;
+}
+
+@keyframes forceSpin {
+  to { transform: rotate(360deg); }
+}
+
+.force-dialog-title {
+  font-size: 0.875rem;
+  font-weight: 700;
+  color: var(--text);
+}
+
+.force-dialog-sub {
+  font-size: 0.7188rem;
+  color: var(--text-faint);
+  margin-top: 4px;
+  font-variant-numeric: tabular-nums;
+}
+
+.force-track {
+  height: 6px;
+  background: var(--surface-4);
+  border: 1px solid var(--border);
+  border-radius: 2px;
+  overflow: hidden;
+  margin: 14px 0;
+}
+
+#force-dialog-fill {
+  display: block;
+  height: 100%;
+  width: 0;
+  background: linear-gradient(90deg, var(--danger), #ff9770);
+  transition: width 0.3s var(--ease);
+}
+
+#force-dialog-log {
+  list-style: none;
+  text-align: left;
+  max-height: 170px;
+  overflow-y: auto;
+  font-size: 0.7188rem;
+  line-height: 1.7;
+  margin-top: 6px;
+}
+
+#force-dialog-log li {
+  padding: 3px 2px;
+  border-bottom: 1px solid var(--hairline);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}

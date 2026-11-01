@@ -1354,25 +1354,41 @@ function confirmForceDelete(paths) {
 }
 
 async function doForceDeleteMany(paths) {
-  setStatus(t("force.deleting"), true);
   $("force-result").textContent = "";
   $("btn-force-delete").disabled = true;
 
-  // Map each installLocation back to its list row so the deletion is visible:
-  // the row shakes red while deleting, then collapses away once done.
+  // Pop the centred deletion animation.
+  const overlay = $("force-delete-overlay");
+  const logEl = $("force-dialog-log");
+  const fill = $("force-dialog-fill");
+  const sub = $("force-dialog-sub");
+  logEl.innerHTML = "";
+  fill.style.width = "0%";
+  sub.textContent = `0 / ${paths.length}`;
+  overlay.hidden = false;
+
+  // Map each installLocation back to its list row so it shakes in place too.
   const itemByPath = new Map();
   document.querySelectorAll("#force-list .force-item").forEach((el) => itemByPath.set(el.title, el));
 
   let done = 0;
   let failed = 0;
-  const pause = (ms) => new Promise((r) => setTimeout(r, ms));
+  const total = paths.length;
 
   for (const path of paths) {
+    const name = path.split(/[\\/]+/).filter(Boolean).pop() || path;
     const el = itemByPath.get(path);
     if (el) {
       el.classList.remove("force-deleted", "force-failed");
       el.classList.add("force-deleting");
     }
+
+    // Show a log line as soon as this item starts.
+    const li = document.createElement("li");
+    li.textContent = `⏳ ${name}`;
+    li.style.color = "var(--text-dim)";
+    logEl.appendChild(li);
+    logEl.scrollTop = logEl.scrollHeight;
 
     try {
       const res = await fetch("/api/force/delete", {
@@ -1383,29 +1399,40 @@ async function doForceDeleteMany(paths) {
       const data = await res.json();
       if (!res.ok) {
         failed++;
+        li.textContent = `✗ ${name}：${data?.error || `HTTP ${res.status}`}`;
+        li.style.color = "var(--danger)";
         if (el) { el.classList.remove("force-deleting"); el.classList.add("force-failed"); }
-        $("force-result").textContent += `✗ ${path}：${data?.error || `HTTP ${res.status}`}\n`;
       } else {
         done++;
+        li.textContent = `✓ ${name}`;
+        li.style.color = "var(--safe)";
         if (el) { el.classList.remove("force-deleting"); el.classList.add("force-deleted"); }
-        $("force-result").textContent += `✓ ${path}：${t("force.done")}\n`;
       }
     } catch (err) {
       failed++;
+      li.textContent = `✗ ${name}：${err.message}`;
+      li.style.color = "var(--danger)";
       if (el) { el.classList.remove("force-deleting"); el.classList.add("force-failed"); }
-      $("force-result").textContent += `✗ ${path}：${err.message}\n`;
     }
 
-    // Brief pause so the shake / collapse animation is actually seen.
-    await pause(200);
+    const finished = done + failed;
+    sub.textContent = `${finished} / ${total}`;
+    fill.style.width = `${(finished / total) * 100}%`;
+    logEl.scrollTop = logEl.scrollHeight;
+
+    // Slight pause so the animation is legible.
+    await new Promise((r) => setTimeout(r, 160));
   }
+
+  // Hold the finished popup briefly so the user sees the outcome, then close.
+  await new Promise((r) => setTimeout(r, 500));
+  overlay.hidden = true;
 
   showBanner(
     failed ? "warn" : "ok",
     `${t("force.done")}：${done} ${t("unit.items")}${failed ? `，${t("force.failed")} ${failed} ${t("unit.items")}` : ""}`
   );
   await loadForceApps();
-  setStatus("");
 }
 
 /* Theme names. Each theme is named after the fruit whose colour it carries. */

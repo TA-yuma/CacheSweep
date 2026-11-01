@@ -563,6 +563,17 @@
     <span id="status" class="status"></span>
   </footer>
 
+  <!-- Force-delete progress animation: a centred popup shown while deletion runs. -->
+  <div id="force-delete-overlay" class="force-overlay" hidden>
+    <div class="force-dialog" role="dialog" aria-modal="true" aria-label="正在删除">
+      <div class="force-spinner"></div>
+      <div class="force-dialog-title" data-i18n="force.deleting">正在暴力删除…</div>
+      <div class="force-dialog-sub" id="force-dialog-sub">0 / 0</div>
+      <div class="force-track"><span id="force-dialog-fill"></span></div>
+      <ul id="force-dialog-log"></ul>
+    </div>
+  </div>
+
   <div class="modal" id="confirm-modal" hidden>
     <div class="modal-box" role="dialog" aria-modal="true" aria-labelledby="modal-title">
       <h2 id="modal-title">确认清理</h2>
