@@ -21,6 +21,7 @@ public static class ApiEndpoints
         MapInventory(api);
         MapPlugins(api);
         MapAutomation(api);
+        MapForce(api);
     }
 
     private static void MapHealth(RouteGroupBuilder api) =>
@@ -512,4 +513,201 @@ public static class ApiEndpoints
             i.Status,
         }),
     };
+
+    /* ------------------------- force delete ------------------------- */
+
+    /// <summary>
+    /// "Brute-force" removal of a user-chosen app folder: kills any process
+    /// running from that path, then deletes every file/directory without being
+    /// blocked by read-only/hidden attributes. Protected system roots are
+    /// refused. The front-end must obtain the user's explicit, repeated consent
+    /// before calling this endpoint.
+    /// </summary>
+    private static void MapForce(RouteGroupBuilder api)
+    {
+        api.MapPost("/force/delete", (ForceDeleteRequest request) =>
+        {
+            var input = request.Path?.Trim();
+            if (string.IsNullOrWhiteSpace(input))
+            {
+                return Results.BadRequest(new { error = "No path supplied." });
+            }
+
+            string full;
+            try
+            {
+                full = Path.GetFullPath(input);
+            }
+            catch (Exception ex)
+            {
+                return Results.BadRequest(new { error = $"Invalid path: {ex.Message}" });
+            }
+
+            if (!Directory.Exists(full) && !File.Exists(full))
+            {
+                return Results.NotFound(new { error = "Path does not exist." });
+            }
+
+            var refused = RefuseProtectedRoot(full);
+            if (refused is not null)
+            {
+                return Results.BadRequest(new { error = refused });
+            }
+
+            var killed = KillProcessesUnder(full);
+            var (files, bytes) = ForceDelete(full);
+
+            return Results.Ok(new
+            {
+                path = full,
+                killedProcesses = killed,
+                deletedFiles = files,
+                freedBytes = bytes,
+            });
+        });
+    }
+
+    private static string? RefuseProtectedRoot(string full)
+    {
+        var root = Path.GetPathRoot(full) ?? string.Empty;
+        var trimmedFull = full.TrimEnd('\\');
+        if (trimmedFull.Equals(root.TrimEnd('\\'), StringComparison.OrdinalIgnoreCase))
+        {
+            return "Refusing to delete a drive root.";
+        }
+
+        var protectedRoots = new[]
+        {
+            Environment.GetFolderPath(Environment.SpecialFolder.Windows),
+            Environment.GetFolderPath(Environment.SpecialFolder.System),
+            Environment.GetFolderPath(Environment.SpecialFolder.CommonProgramFiles),
+            Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles),
+            Environment.GetFolderPath(Environment.SpecialFolder.ProgramFilesX86),
+        };
+
+        foreach (var p in protectedRoots)
+        {
+            if (string.IsNullOrEmpty(p))
+            {
+                continue;
+            }
+
+            var trimmed = Path.GetFullPath(p).TrimEnd('\\');
+            if (trimmedFull.Equals(trimmed, StringComparison.OrdinalIgnoreCase)
+                || trimmedFull.StartsWith(trimmed + "\\", StringComparison.OrdinalIgnoreCase))
+            {
+                return $"Refusing to delete the protected system location: {trimmed}";
+            }
+        }
+
+        return null;
+    }
+
+    private static List<string> KillProcessesUnder(string path)
+    {
+        var killed = new List<string>();
+        var full = Path.GetFullPath(path);
+
+        foreach (var p in Process.GetProcesses())
+        {
+            try
+            {
+                var exe = p.MainModule?.FileName;
+                if (exe is not null
+                    && (exe.StartsWith(full, StringComparison.OrdinalIgnoreCase)
+                        || string.Equals(exe, full, StringComparison.OrdinalIgnoreCase)))
+                {
+                    p.Kill(entireProcessTree: true);
+                    killed.Add(p.ProcessName);
+                }
+            }
+            catch
+            {
+                // Process exited between enumeration and kill, or access denied.
+            }
+        }
+
+        return killed;
+    }
+
+    private static (long Files, long Bytes) ForceDelete(string path)
+    {
+        long files = 0;
+        long bytes = 0;
+
+        if (File.Exists(path))
+        {
+            var fi = new FileInfo(path);
+            fi.Attributes = FileAttributes.Normal;
+            bytes = fi.Length;
+            File.Delete(path);
+            return (1, bytes);
+        }
+
+        if (!Directory.Exists(path))
+        {
+            return (0, 0);
+        }
+
+        try
+        {
+            var di = new DirectoryInfo(path);
+
+            foreach (var f in di.EnumerateFiles("*", SearchOption.AllDirectories))
+            {
+                try
+                {
+                    f.Attributes = FileAttributes.Normal;
+                    bytes += f.Length;
+                    f.Delete();
+                    files++;
+                }
+                catch
+                {
+                    try
+                    {
+                        f.Attributes = FileAttributes.Normal;
+                        f.Delete();
+                        bytes += f.Length;
+                        files++;
+                    }
+                    catch
+                    {
+                        // Locked by another process; best-effort.
+                    }
+                }
+            }
+
+            foreach (var d in di.EnumerateDirectories("*", SearchOption.AllDirectories)
+                                 .OrderByDescending(x => x.FullName.Length))
+            {
+                try
+                {
+                    d.Attributes = FileAttributes.Normal;
+                    d.Delete(recursive: true);
+                }
+                catch
+                {
+                    // Best-effort.
+                }
+            }
+
+            try
+            {
+                di.Delete(recursive: true);
+            }
+            catch
+            {
+                // The root may still be locked; it clears on next launch.
+            }
+        }
+        catch
+        {
+            // The top-level directory may have vanished.
+        }
+
+        return (files, bytes);
+    }
 }
+
+public sealed record ForceDeleteRequest(string? Path);

@@ -1205,6 +1205,80 @@ $("tab-sweep").addEventListener("click", () => showView("sweep"));
 $("tab-disk").addEventListener("click", () => showView("disk"));
 $("tab-rules").addEventListener("click", () => showView("rules"));
 $("tab-settings").addEventListener("click", () => showView("settings"));
+$("tab-force").addEventListener("click", () => showView("force"));
+
+/* ---------------- brute-force removal ---------------- */
+
+$("btn-force-delete").addEventListener("click", startForceDelete);
+
+function startForceDelete() {
+  const path = ($("force-path").value || "").trim();
+  if (!path) {
+    showBanner("warn", t("force.needPath"));
+    return;
+  }
+  const dirName = path.split(/[\\/]+/).filter(Boolean).pop() || path;
+
+  // Step 1: explicit warning.
+  openModal(
+    t("force.warning"),
+    `<p>${t("force.warnBody1")}</p>` +
+      `<p><strong>${escapeHtml(path)}</strong></p>` +
+      `<p style="color:var(--danger)">${t("force.warnBody2")}</p>`,
+    () => {
+      // Step 2: type the directory name to prove intent.
+      openModal(
+        t("force.typeConfirm"),
+        `<p>${t("force.typeConfirmBody")}：<strong>${escapeHtml(dirName)}</strong></p>` +
+          `<input id="force-type-input" type="text" class="field" style="width:100%" placeholder="${escapeHtml(dirName)}" />`,
+        () => {
+          const typed = (($("force-type-input")?.value) || "").trim();
+          if (typed !== dirName) {
+            showBanner("error", t("force.confirmMismatch"));
+            return;
+          }
+          // Step 3: final, non-revocable confirmation.
+          openModal(
+            t("force.finalConfirm"),
+            `<p style="color:var(--danger);font-weight:800">${t("force.finalBody")}</p>`,
+            () => doForceDelete(path),
+            t("force.doDelete")
+          );
+        },
+        t("action.continue")
+      );
+    },
+    t("action.continue")
+  );
+}
+
+async function doForceDelete(path) {
+  setStatus(t("force.deleting"), true);
+  $("force-result").textContent = "";
+  try {
+    const res = await fetch("/api/force/delete", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ path }),
+    });
+    const data = await res.json();
+    if (!res.ok) {
+      throw new Error(data?.error || `HTTP ${res.status}`);
+    }
+    const killed = data.killedProcesses?.length || 0;
+    showBanner(
+      "ok",
+      `${t("force.done")}：${t("clean.freed")} ${formatBytes(data.freedBytes || 0)}，` +
+        `${t("clean.involving")} ${(data.deletedFiles || 0).toLocaleString("zh-CN")} ${t("unit.files")}，` +
+        `${t("force.killed")} ${killed} ${t("unit.processes")}`
+    );
+    $("force-result").textContent = `${t("force.done")}：${path}`;
+  } catch (err) {
+    showBanner("error", `${t("force.failed")}：${err.message}`);
+  } finally {
+    setStatus("");
+  }
+}
 
 /* Theme names. Each theme is named after the fruit whose colour it carries. */
 const THEME_LABEL = {

@@ -54,6 +54,7 @@
         <button id="tab-rules" role="tab" aria-selected="false" data-i18n="tab.rules">规则管理</button>
         <button id="tab-plugins" role="tab" aria-selected="false" data-i18n="tab.plugins">插件</button>
         <button id="tab-settings" role="tab" aria-selected="false" data-i18n="tab.settings">设置</button>
+        <button id="tab-force" role="tab" aria-selected="false" data-i18n="tab.force">暴力清除</button>
       </nav>
 
       <div class="theme-switch" id="theme-switch" role="group" data-i18n-aria="theme.switch" aria-label="主题">
@@ -513,6 +514,28 @@
                rel="noopener" class="btn ghost sm" data-i18n="settings.releases">发布页面</a>
           </div>
         </div>
+      </div>
+    </section>
+
+    <!-- ============ view: force (brute-force removal) ============ -->
+    <section class="view" id="view-force" hidden>
+      <div class="card card-full">
+        <h3 data-i18n="force.title">暴力清除</h3>
+        <p class="card-sub" data-i18n="force.subtitle">危险操作：关闭占用进程并强制删除指定目录。此操作不可恢复，执行前需多重确认。</p>
+
+        <div class="field">
+          <label data-i18n="force.pathLabel">要删除的应用/目录路径</label>
+          <input type="text" id="force-path" data-i18n-placeholder="force.pathPlaceholder" placeholder="例如 D:\Program Files\某应用" />
+        </div>
+
+        <div class="field">
+          <label data-i18n="force.confirmLabel">输入目录名以确认</label>
+          <input type="text" id="force-confirm" data-i18n-placeholder="force.confirmPlaceholder" placeholder="输入目录名" />
+        </div>
+
+        <button id="btn-force-delete" class="btn danger" data-i18n="force.btn">暴力删除</button>
+
+        <div id="force-result" class="muted" style="margin-top:10px;font-size:0.75rem"></div>
       </div>
     </section>
   </main>
