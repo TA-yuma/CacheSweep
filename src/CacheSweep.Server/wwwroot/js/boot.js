@@ -49,11 +49,10 @@ function bootAnimation() {
   const brand = overlay?.querySelector(".boot-brand");
   if (!overlay || !canvas) return;
 
-  if (window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches) {
-    brand?.classList.add("boot-brand-show");
-    overlay.remove();
-    return;
-  }
+  // The startup animation is a deliberate feature, so it always plays; it is
+  // never skipped. (Preferring less motion elsewhere does not bypass the
+  // brand moment — and skipping it here used to drop the overlay instantly,
+  // flashing the app UI before the transition had run.)
 
   const ctx = canvas.getContext("2d");
   if (!ctx) { overlay.remove(); return; }
