@@ -42,7 +42,7 @@ RestartApplications=no
 
 [Languages]
 ; 安装器界面语言。应用本身内置中英俄三语，安装后在设置里切换。
-Name: "chinesesimp"; MessagesFile: "compiler:ChineseSimplified.isl"
+Name: "chinesesimp"; MessagesFile: "ChineseSimplified.isl"
 Name: "english"; MessagesFile: "compiler:Default.isl"
 
 [Tasks]
