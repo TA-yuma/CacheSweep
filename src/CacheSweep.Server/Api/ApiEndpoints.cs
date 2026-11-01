@@ -1,7 +1,9 @@
 using System.Diagnostics;
 using System.Runtime.CompilerServices;
+using System.Runtime.InteropServices;
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using Microsoft.Win32;
 using CacheSweep.Core.Models;
 using CacheSweep.Core.Rules;
 using CacheSweep.Server.Api;
@@ -560,6 +562,7 @@ public static class ApiEndpoints
             Thread.Sleep(800);
 
             var (files, bytes, failed, remains) = ForceDelete(full);
+            var removedRegistry = DeleteUninstallEntries(full);
 
             return Results.Ok(new
             {
@@ -569,6 +572,7 @@ public static class ApiEndpoints
                 freedBytes = bytes,
                 failedFiles = failed,
                 remains = remains,
+                registryRemoved = removedRegistry,
             });
         });
     }
@@ -636,6 +640,18 @@ public static class ApiEndpoints
         return killed;
     }
 
+    [DllImport("kernel32.dll", SetLastError = true, CharSet = CharSet.Unicode)]
+    private static extern bool MoveFileEx(string lpExistingFileName, string? lpNewFileName, MoveFileFlags dwFlags);
+
+    [Flags]
+    private enum MoveFileFlags
+    {
+        MOVEFILE_REPLACE_EXISTING = 0x1,
+        MOVEFILE_COPY_ALLOWED = 0x2,
+        MOVEFILE_DELAY_UNTIL_REBOOT = 0x4,
+        MOVEFILE_WRITE_THROUGH = 0x8,
+    }
+
     private static (long Files, long Bytes, long Failed, bool Remains) ForceDelete(string path)
     {
         long files = 0;
@@ -654,6 +670,8 @@ public static class ApiEndpoints
             }
             catch
             {
+                // Locked: schedule it for deletion at next reboot.
+                MoveFileEx(path, null, MoveFileFlags.MOVEFILE_DELAY_UNTIL_REBOOT);
                 return (0, 0, 1, true);
             }
         }
@@ -663,11 +681,26 @@ public static class ApiEndpoints
             return (0, 0, 0, false);
         }
 
+        // Fast path: one recursive delete. Handles normal folders instantly and
+        // never blocks the UI for a large application directory.
+        try
+        {
+            Directory.Delete(path, true);
+            if (!Directory.Exists(path))
+            {
+                return (0, 0, 0, false);
+            }
+        }
+        catch
+        {
+            // Fall through to the per-file pass below.
+        }
+
+        // Slow path for folders that would not delete wholesale (locks, ACLs).
         try
         {
             var di = new DirectoryInfo(path);
 
-            // Strip read-only everywhere first, so nothing blocks the delete.
             foreach (var f in di.EnumerateFiles("*", SearchOption.AllDirectories))
             {
                 try { f.IsReadOnly = false; } catch { }
@@ -677,36 +710,112 @@ public static class ApiEndpoints
                 try { d.Attributes = FileAttributes.Normal; } catch { }
             }
 
-            // Delete files; count failures instead of silently ignoring them.
             foreach (var f in di.EnumerateFiles("*", SearchOption.AllDirectories))
             {
-                try
+                var deleted = false;
+                for (var attempt = 0; attempt < 2 && !deleted; attempt++)
                 {
-                    bytes += f.Length;
-                    f.Delete();
-                    files++;
+                    try
+                    {
+                        if (attempt == 0)
+                        {
+                            bytes += f.Length;
+                        }
+                        f.Delete();
+                        files++;
+                        deleted = true;
+                    }
+                    catch
+                    {
+                        if (attempt < 1)
+                        {
+                            Thread.Sleep(80);
+                        }
+                    }
                 }
-                catch
+
+                if (!deleted)
                 {
+                    // Schedule the locked file for removal at reboot.
+                    try { MoveFileEx(f.FullName, null, MoveFileFlags.MOVEFILE_DELAY_UNTIL_REBOOT); } catch { }
                     failed++;
                 }
             }
 
-            // Delete now-empty directories deepest-first, then the root.
             foreach (var d in di.EnumerateDirectories("*", SearchOption.AllDirectories)
                                  .OrderByDescending(x => x.FullName.Length))
             {
                 try { d.Delete(false); } catch { }
             }
             try { di.Delete(false); } catch { }
-
-            var remains = Directory.Exists(path);
-            return (files, bytes, failed, remains);
         }
         catch
         {
-            return (files, bytes, failed, Directory.Exists(path));
+            // Enumeration may fail part-way; the final check below reports truth.
         }
+
+        return (files, bytes, failed, Directory.Exists(path));
+    }
+
+    /// <summary>
+    /// Removes the Windows "Add/Remove Programs" entries whose InstallLocation
+    /// points at the deleted path, so the app leaves no registry trace. HKLM
+    /// keys may require elevation and are attempted on a best-effort basis.
+    /// </summary>
+    private static List<string> DeleteUninstallEntries(string path)
+    {
+        var removed = new List<string>();
+        if (!OperatingSystem.IsWindows())
+        {
+            // The registry is Windows-only; nothing to remove elsewhere.
+            return removed;
+        }
+
+        var full = Path.GetFullPath(path).TrimEnd('\\');
+
+        var locations = new (RegistryKey Root, string SubKey)[]
+        {
+            (Registry.CurrentUser, @"SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall"),
+            (Registry.LocalMachine, @"SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall"),
+            (Registry.LocalMachine, @"SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall"),
+        };
+
+        foreach (var (root, subKey) in locations)
+        {
+            try
+            {
+                using var uninstall = root.OpenSubKey(subKey);
+                if (uninstall is null)
+                {
+                    continue;
+                }
+
+                foreach (var name in uninstall.GetSubKeyNames())
+                {
+                    try
+                    {
+                        using var appKey = uninstall.OpenSubKey(name);
+                        var loc = appKey?.GetValue("InstallLocation") as string;
+                        if (loc is not null
+                            && Path.GetFullPath(loc).TrimEnd('\\').Equals(full, StringComparison.OrdinalIgnoreCase))
+                        {
+                            root.DeleteSubKeyTree(subKey + "\\" + name, false);
+                            removed.Add(name);
+                        }
+                    }
+                    catch
+                    {
+                        // HKLM keys need elevation; best-effort.
+                    }
+                }
+            }
+            catch
+            {
+                // Registry hive unavailable.
+            }
+        }
+
+        return removed;
     }
 }
 

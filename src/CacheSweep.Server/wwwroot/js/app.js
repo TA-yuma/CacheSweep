@@ -1317,8 +1317,6 @@ function startForceDeleteSelected() {
 
 function confirmForceDelete(paths) {
   const count = paths.length;
-  const firstName = paths[0].split(/[\\/]+/).filter(Boolean).pop() || paths[0];
-  const confirmWord = count === 1 ? firstName : String(count);
   const listHtml = paths.map((p) => `<li style="margin:2px 0">${escapeHtml(p)}</li>`).join("");
 
   // Step 1: warning.
@@ -1328,14 +1326,14 @@ function confirmForceDelete(paths) {
       `<ul style="max-height:130px;overflow:auto;font-size:0.8125rem">${listHtml}</ul>` +
       `<p style="color:var(--danger)">${t("force.warnBody2")}</p>`,
     () => {
-      // Step 2: type the folder name (or the count) to prove intent.
+      // Step 2: type "yes" to proceed, or "no" to cancel.
       openModal(
         t("force.typeConfirm"),
-        `<p>${t("force.typeConfirmBody")}：<strong>${escapeHtml(confirmWord)}</strong></p>` +
-          `<input id="force-type-input" type="text" class="field" style="width:100%" />`,
+        `<p>${t("force.typeConfirmBody")}</p>` +
+          `<input id="force-type-input" type="text" class="field" style="width:100%" placeholder="yes / no" />`,
         () => {
-          const typed = (($("force-type-input")?.value) || "").trim();
-          if (typed !== confirmWord) {
+          const typed = (($("force-type-input")?.value) || "").trim().toLowerCase();
+          if (typed !== "yes") {
             showBanner("error", t("force.confirmMismatch"));
             return;
           }
@@ -1366,6 +1364,8 @@ async function doForceDeleteMany(paths) {
   fill.style.width = "0%";
   sub.textContent = `0 / ${paths.length}`;
   overlay.hidden = false;
+  // Give the popup a frame to paint before deletion starts, so it never looks frozen.
+  await new Promise((r) => requestAnimationFrame(() => r()));
 
   // Map each installLocation back to its list row so it shakes in place too.
   const itemByPath = new Map();
