@@ -2330,3 +2330,37 @@ html.no-feedback .is-pressing { transform: none; filter: none; }
 .force-item .app-icon-letter {
   flex: none;
 }
+
+/* Deleting animation: the row shakes and glows red while its process is being
+   killed and its folder is wiped, then collapses away once finished. */
+.force-item.force-deleting {
+  animation: forceShake 0.4s ease-in-out infinite;
+  background: color-mix(in srgb, var(--danger) 16%, transparent);
+  border-color: var(--danger) !important;
+}
+
+.force-item.force-deleting .app-name { color: var(--danger); }
+
+@keyframes forceShake {
+  0%, 100% { transform: translateX(0); }
+  20% { transform: translateX(-4px); }
+  40% { transform: translateX(4px); }
+  60% { transform: translateX(-2px); }
+  80% { transform: translateX(2px); }
+}
+
+.force-item.force-deleted {
+  animation: forceGone 0.55s ease forwards;
+  pointer-events: none;
+}
+
+@keyframes forceGone {
+  0% { opacity: 1; transform: scale(1); }
+  60% { opacity: 0.25; transform: scale(0.92); }
+  100% { opacity: 0; transform: scale(0.85); }
+}
+
+.force-item.force-failed {
+  animation: forceShake 0.35s ease-in-out 2;
+  border-color: var(--caution) !important;
+}

@@ -1356,9 +1356,24 @@ function confirmForceDelete(paths) {
 async function doForceDeleteMany(paths) {
   setStatus(t("force.deleting"), true);
   $("force-result").textContent = "";
+  $("btn-force-delete").disabled = true;
+
+  // Map each installLocation back to its list row so the deletion is visible:
+  // the row shakes red while deleting, then collapses away once done.
+  const itemByPath = new Map();
+  document.querySelectorAll("#force-list .force-item").forEach((el) => itemByPath.set(el.title, el));
+
   let done = 0;
   let failed = 0;
+  const pause = (ms) => new Promise((r) => setTimeout(r, ms));
+
   for (const path of paths) {
+    const el = itemByPath.get(path);
+    if (el) {
+      el.classList.remove("force-deleted", "force-failed");
+      el.classList.add("force-deleting");
+    }
+
     try {
       const res = await fetch("/api/force/delete", {
         method: "POST",
@@ -1368,16 +1383,23 @@ async function doForceDeleteMany(paths) {
       const data = await res.json();
       if (!res.ok) {
         failed++;
+        if (el) { el.classList.remove("force-deleting"); el.classList.add("force-failed"); }
         $("force-result").textContent += `✗ ${path}：${data?.error || `HTTP ${res.status}`}\n`;
       } else {
         done++;
+        if (el) { el.classList.remove("force-deleting"); el.classList.add("force-deleted"); }
         $("force-result").textContent += `✓ ${path}：${t("force.done")}\n`;
       }
     } catch (err) {
       failed++;
+      if (el) { el.classList.remove("force-deleting"); el.classList.add("force-failed"); }
       $("force-result").textContent += `✗ ${path}：${err.message}\n`;
     }
+
+    // Brief pause so the shake / collapse animation is actually seen.
+    await pause(200);
   }
+
   showBanner(
     failed ? "warn" : "ok",
     `${t("force.done")}：${done} ${t("unit.items")}${failed ? `，${t("force.failed")} ${failed} ${t("unit.items")}` : ""}`
