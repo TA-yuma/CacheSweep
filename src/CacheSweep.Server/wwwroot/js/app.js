@@ -1317,37 +1317,17 @@ function startForceDeleteSelected() {
 
 function confirmForceDelete(paths) {
   const count = paths.length;
-  const listHtml = paths.map((p) => `<li style="margin:2px 0">${escapeHtml(p)}</li>`).join("");
+  const listHtml = paths
+    .map((p) => `<li style="margin:2px 0">${escapeHtml(p.split(/[\\/]+/).filter(Boolean).pop() || p)}</li>`)
+    .join("");
 
-  // Step 1: warning.
+  // One-click confirmation: a single dialog with a single "delete" action.
   openModal(
-    t("force.warning"),
-    `<p>${t("force.warnBody1")}（${count} ${t("unit.items")}）</p>` +
-      `<ul style="max-height:130px;overflow:auto;font-size:0.8125rem">${listHtml}</ul>` +
-      `<p style="color:var(--danger)">${t("force.warnBody2")}</p>`,
-    () => {
-      // Step 2: type "yes" to proceed, or "no" to cancel.
-      openModal(
-        t("force.typeConfirm"),
-        `<p>${t("force.typeConfirmBody")}</p>` +
-          `<input id="force-type-input" type="text" class="field" style="width:100%" placeholder="yes / no" />`,
-        () => {
-          const typed = (($("force-type-input")?.value) || "").trim().toLowerCase();
-          if (typed !== "yes") {
-            showBanner("error", t("force.confirmMismatch"));
-            return;
-          }
-          openModal(
-            t("force.finalConfirm"),
-            `<p style="color:var(--danger);font-weight:800">${t("force.finalBody")}</p>`,
-            () => doForceDeleteMany(paths),
-            t("force.doDelete")
-          );
-        },
-        t("action.continue")
-      );
-    },
-    t("action.continue")
+    `${t("force.btn")} ${count} ${t("unit.items")}`,
+    `<p style="color:var(--danger);font-weight:800">${t("force.finalBody")}</p>` +
+      `<ul style="max-height:150px;overflow:auto;font-size:0.8125rem;margin-top:8px">${listHtml}</ul>`,
+    () => doForceDeleteMany(paths),
+    t("force.doDelete")
   );
 }
 
